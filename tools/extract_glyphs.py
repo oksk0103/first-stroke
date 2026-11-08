@@ -39,26 +39,21 @@ for syl in SYLS:
         return b.bounds
     onset,vowel,final=decompose(syl)
     bb_all=bbox(contours)
-    # 조각 선택: 모음이 ㅏㅗㅜㅣ면 모음 획, 아니면 초성 획. 받침 있으면 조립 없음(None).
-    target=None
-    if final==0:
-        if vowel in "ㅏㅣ":   # 오른쪽에 붙는 모음: 왼쪽 끝이 글자 가운데보다 오른쪽인 윤곽
+    # 조각 = 초성 묶음 + 모음 묶음 (둘 다 떨어져 있을 때만). 받침 있으면 조립 없음.
+    # 묶음 나누기: 가로 모음(ㅏㅣ)은 x 가운데 기준, 세로 모음(ㅗㅜ)은 y 가운데 기준으로 윤곽을 둘로 가른다.
+    groups=[]
+    if final==0 and len(contours)>=2:
+        if vowel in "ㅏㅣ":
             mid=(bb_all[0]+bb_all[2])/2
-            target=[c for c in contours if bbox([c])[0]>mid]
-        elif vowel in "ㅗㅜ":  # 아래 모음: 위쪽 끝이 글자 가운데보다 아래인 윤곽
+            on=[c for c in contours if bbox([c])[0]<=mid]; vo=[c for c in contours if bbox([c])[0]>mid]
+        elif vowel in "ㅗㅜ":
             mid=(bb_all[1]+bb_all[3])/2
-            target=[c for c in contours if bbox([c])[3]<mid]
-        elif onset in "ㄱㄴ":  # 초성 조립 (모음이 조립 대상이 아닐 때)
-            mid=(bb_all[0]+bb_all[2])/2
-            target=[c for c in contours if (lambda b:(b[0]+b[2])/2<mid)(bbox([c]))]
-        # 모음 ㅏㅗㅜㅣ이면서 초성이 ㄱㄴ인 글자(가·고·구·기·나·노·누·니)는 모음 우선 — 첫 경험은 성공이어야 하니 조각 수 적은 쪽
-        if vowel in "ㅏㅗㅜㅣ" and onset in "ㄱㄴ":
-            mid=(bb_all[0]+bb_all[2])/2
-            onset_cs=[c for c in contours if (lambda b:(b[0]+b[2])/2<mid)(bbox([c]))] if vowel in "ㅏㅣ" else [c for c in contours if (lambda b:(b[1]+b[3])/2>=mid)(bbox([c]))]
-            # ㄱ·ㄴ은 보통 한 윤곽 → 조각 1개. 모음이 2개면 모음, 1개면 초성.
-            if target and len(target)>=2: pass
-            else: target=onset_cs
-    pieces=[{"d":to_svg([c]),"bbox":bbox([c])} for c in (target or [])]
+            on=[c for c in contours if bbox([c])[3]>=mid]; vo=[c for c in contours if bbox([c])[3]<mid]
+        else:
+            on,vo=contours,[]
+        if on and vo: groups=[on,vo]          # 두 묶음 다 있어야 조립
+    target=groups
+    pieces=[{"d":to_svg(g_),"bbox":bbox(g_)} for g_ in target]
     out[syl]={"upm":upm,"adv":g.width,"bbox":bb_all,"ghost":to_svg(contours),"pieces":pieces}
     print(syl, onset, vowel, "final" if final else "", "contours",len(contours),"pieces",len(pieces))
 json.dump(out,open("glyphs.json","w",encoding="utf-8"),ensure_ascii=False)
