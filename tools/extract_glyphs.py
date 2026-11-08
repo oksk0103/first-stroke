@@ -40,7 +40,7 @@ def stem_left_edge(path, bb, from_left=False):
             inside=True; left=x
         elif inside: break
     return left
-def bar_top_edge(path, bb):
+def bar_top_edge(path, bb, tick=True):
     """가로 막대(너비 60% 이상) 중 가장 아래 것의 위 가장자리 y, 그리고 그 위 좁은 구간(세로 꼭지)의 중간 y"""
     x0,y0,x1,y1=bb; gw=x1-x0; step=3
     inside=False; top=None
@@ -56,7 +56,7 @@ def bar_top_edge(path, bb):
         b=cover(path, x0-1, y, x1+1, y+step)
         if b and (b[2]-b[0])<gw*0.3: narrow_end=y+step
         else: break
-    return (top+narrow_end)/2 if narrow_end>top else top
+    return narrow_end if tick else top   # ㅗ: 꼭지 윗선에서 잘라 꼭지는 모음 조각 / ㅜ: 막대 윗선(위 좁은 구간은 초성의 획)
 
 out={}
 for syl in SYLS:
@@ -77,7 +77,7 @@ for syl in SYLS:
             fy=bar_top_edge(full,(x0,y0,x1,y0+(y1-y0)*0.5)) or (y0+(y1-y0)*0.42)
             pieces=[clip(full,x0-M,fy,sx,y1+M), clip(full,sx,fy,x1+M,y1+M), clip(full,x0-M,y0-M,x1+M,fy)]
     elif vowel in "ㅗㅛㅜㅠㅡ":              # 가로 모음: 막대 위(꼭지 중간)에서 자름
-        cy=bar_top_edge(full, bb)
+        cy=bar_top_edge(full, bb, tick=vowel in "ㅗㅛ")
         pieces=[clip(full,x0-M,cy,x1+M,y1+M), clip(full,x0-M,y0-M,x1+M,cy)]
     pieces=[p for p in pieces if p.bounds]
     # 부스러기 정리: 자르면서 떨어져 나온 작은 윤곽(서리프 머리 등)은 가장 가까운 다른 조각으로 돌려보낸다
