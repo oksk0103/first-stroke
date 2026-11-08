@@ -34,6 +34,13 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);o
 .paper-photo img{max-width:100%;max-height:40vh;display:block}
 .paper-photo .empty{padding:40px 60px;color:var(--ink-soft);font-size:18px}
 .big{font-family:var(--serif);font-size:min(230px,32vh);line-height:1;font-weight:400}
+/* 홈 = 공책 표지. 종이결 바탕, 제목 한 줄, 오늘 글자는 종이 한 장 위에. 숫자·버튼 없음 */
+#home{background:var(--paper) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .3 0 0 0 0 .25 0 0 0 0 .15 0 0 0 .06 0'/></filter><rect width='240' height='240' filter='url(%23n)'/></svg>")}
+.cover{display:flex;flex-direction:column;align-items:center;gap:18px}
+.coverTitle{font-family:var(--serif);font-size:22px;letter-spacing:.12em;color:var(--ink-soft)}
+.sheetBig{background:#FBF8F1;border-radius:14px;padding:clamp(18px,4vh,40px) clamp(36px,7vw,80px);box-shadow:0 1px 2px rgba(27,42,74,.14),0 12px 32px -18px rgba(27,42,74,.35),0 0 0 1px rgba(27,42,74,.06);position:relative}
+.sheetBig::after{content:"";position:absolute;left:14px;right:14px;bottom:-6px;height:6px;border-radius:0 0 12px 12px;background:#F0EADD;box-shadow:0 1px 2px rgba(27,42,74,.10);z-index:-1}
+.coverHint{font-size:14px;color:var(--ink-faint)}
 .quiet{color:var(--ink-soft);font-size:20px}
 /* 오늘 주묵 담당 (어른이 보는 조용한 줄). 홈 오른쪽 위 */
 #who{position:absolute;top:max(22px,env(safe-area-inset-top,0px));right:max(24px,env(safe-area-inset-right,0px));display:flex;gap:6px;font-size:16px;color:var(--ink-soft)}
@@ -100,8 +107,12 @@ textarea{width:100%;min-height:120px;font:12px ui-monospace,monospace;border:1px
 <div id="app">
   <!-- 홈: 종이 사진 한 장 + 오늘 글자. 30초 아무 입력 없으면 그날 끝. -->
   <div class="stage on" id="home"><div class="center" id="homeCenter">
-    <div class="paper-photo" id="homePhoto"><div class="empty">오늘 종이</div></div>
-    <div class="big" id="homeSyl">이</div>
+    <div class="cover">
+      <div class="coverTitle" id="coverTitle">공책</div>
+      <div class="sheetBig"><div class="big" id="homeSyl">이</div></div>
+      <div class="paper-photo" id="homePhoto"><div class="empty">오늘 종이</div></div>
+      <div class="coverHint">글자를 누르면 시작해요</div>
+    </div>
   </div>
   <div id="pile" hidden></div>
   <div id="who"></div></div>
@@ -464,7 +475,8 @@ function renderWho(){ const w=$("who"); w.innerHTML=""; const hs=helpers(); if(!
     sp.addEventListener("pointerdown",e=>{ e.stopPropagation(); t=setTimeout(()=>{ settings.openedBy=h; renderWho(); },1000); });
     ["pointerup","pointercancel","pointerleave"].forEach(ev=>sp.addEventListener(ev,e=>{ e.stopPropagation(); clearTimeout(t); }));
     w.appendChild(sp); } }
-function goHome(){ clearTimers(); plan=planToday(sessions); $("homeSyl").textContent=plan.syllable; renderPile(); renderWho(); show("home");
+function childName(){ return settings.names.split(",").map(x=>x.trim()).filter(Boolean)[0]||"아이"; }
+function goHome(){ clearTimers(); plan=planToday(sessions); $("homeSyl").textContent=plan.syllable; $("coverTitle").textContent=`${childName()}의 공책`; renderPile(); renderWho(); show("home");
   timers.home=setTimeout(()=>{ /* 켜기 전 거부권: 아이가 안 오면 그날 끝 */ show("ended"); }, CFG.homeWait); }
 $("homeCenter").addEventListener("pointerup",()=>{ if(stage!=="home") return; startSession(); });
 
