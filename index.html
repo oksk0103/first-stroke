@@ -178,7 +178,7 @@ const PHILOSOPHY = Object.freeze({ tracing:false, rewards:[], correctness:false,
 if (PHILOSOPHY.tracing || PHILOSOPHY.rewards.length || PHILOSOPHY.correctness || !PHILOSOPHY.syllableOnly || !PHILOSOPHY.adultFirst) throw new Error("철학 위반");
 
 const CFG = {
-  ink:"#1B2A4A", paper:"#F4EFE4", inkWidth:22, canvasFraction:2/3,
+  ink:"#1B2A4A", adultInk:"#A8432E", paper:"#F4EFE4", /* 아이 = 먹, 어른 = 주묵(체본 전통) */ inkWidth:22, canvasFraction:2/3,
   soundDelay:2000, adultLifetime(n){ return n<4?null : n<=6?8000 : 3000; },
   idleEnd:10000, homeWait:30000, dormantDays:14, barsTimeout:10000,
   writeList:["가","고","구","기","나","노","누","니","아","오","우","이"],
@@ -283,8 +283,8 @@ const CV = (()=>{
     for(const c of [adult,pool,child,sib]){ c.width=W*dpr; c.height=H*dpr; c.style.width=W+"px"; c.style.height=H+"px"; }
     div.style.left=(leftHanded?w-1:W-w-1)+"px"; div.style.display=settings.sibling?"block":"none"; redrawAll(); }
   addEventListener("resize",layout);
-  function ctx(c){ const x=c.getContext("2d"); x.setTransform(dpr,0,0,dpr,0,0); x.lineCap="round"; x.lineJoin="round"; x.strokeStyle=CFG.ink; x.lineWidth=CFG.inkWidth; return x; }
-  function drawStroke(x,pts){ if(pts.length<2){ if(pts.length===1){ x.beginPath(); x.arc(pts[0].x,pts[0].y,CFG.inkWidth/2,0,7); x.fillStyle=CFG.ink; x.fill(); } return; } x.beginPath(); x.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++){ const m={x:(pts[i-1].x+pts[i].x)/2,y:(pts[i-1].y+pts[i].y)/2}; x.quadraticCurveTo(pts[i-1].x,pts[i-1].y,m.x,m.y);} x.lineTo(pts.at(-1).x,pts.at(-1).y); x.stroke(); }
+  function ctx(c){ const x=c.getContext("2d"); x.setTransform(dpr,0,0,dpr,0,0); x.lineCap="round"; x.lineJoin="round"; x.strokeStyle=(c===adult?CFG.adultInk:CFG.ink); x.fillStyle=x.strokeStyle; x.lineWidth=CFG.inkWidth; return x; }
+  function drawStroke(x,pts){ if(pts.length<2){ if(pts.length===1){ x.beginPath(); x.arc(pts[0].x,pts[0].y,CFG.inkWidth/2,0,7); x.fill(); } return; } x.beginPath(); x.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++){ const m={x:(pts[i-1].x+pts[i].x)/2,y:(pts[i-1].y+pts[i].y)/2}; x.quadraticCurveTo(pts[i-1].x,pts[i-1].y,m.x,m.y);} x.lineTo(pts.at(-1).x,pts.at(-1).y); x.stroke(); }
   function redrawAll(){ const xc=ctx(child); xc.clearRect(0,0,W,H); for(const s of strokes) drawStroke(xc,s); const xa=ctx(adult); xa.clearRect(0,0,W,H); for(const s of adultStrokes) drawStroke(xa,s); }
   function inRect(r,x,y){ return x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h; }
   function pos(e){ const b=wrap.getBoundingClientRect(); return {x:e.clientX-b.left,y:e.clientY-b.top,t:performance.now()}; }
