@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="첫 획">
+<meta name="theme-color" content="#F4EFE4">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.png">
+<title>첫 획</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600&family=Noto+Sans+KR:wght@400;500&display=swap">
+<style>
+/* 한 장의 종이. 미색 지면 + 남색 잉크, 단일 테마(종이는 다크모드가 없다). 화면 전체가 캔버스, 어른 UI는 숨김. */
+:root{
+  --paper:#F4EFE4; --ink:#1B2A4A; --ink-soft:rgba(27,42,74,.55); --ink-faint:rgba(27,42,74,.12);
+  --well:rgba(255,255,255,.35);
+  --serif:"Noto Serif KR",Georgia,"Apple SD Gothic Neo",serif;
+  --sans:"Noto Sans KR",-apple-system,"Apple SD Gothic Neo",sans-serif;
+  color-scheme:light;
+}
+html,body{height:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);overflow:hidden;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;touch-action:none;overscroll-behavior:none}
+#app{position:fixed;inset:0}
+.stage{position:absolute;inset:0;display:none}
+.stage.on{display:block}
+/* 홈·종료 */
+.center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:24px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.paper-photo{max-width:min(520px,80vw);max-height:40vh;border-radius:12px;background:var(--well);display:flex;align-items:center;justify-content:center;overflow:hidden}
+.paper-photo img{max-width:100%;max-height:40vh;display:block}
+.paper-photo .empty{padding:40px 60px;color:var(--ink-soft);font-size:18px}
+.big{font-family:var(--serif);font-size:min(160px,28vh);line-height:1;font-weight:400}
+.quiet{color:var(--ink-soft);font-size:20px}
+/* 캔버스 */
+#canvasWrap{position:absolute;inset:0}
+canvas{position:absolute;top:0;left:0;touch-action:none}
+#adultLayer{opacity:1;transition:opacity .6s}
+#siblingDivider{position:absolute;top:40px;bottom:40px;width:2px;background:var(--ink-faint);display:none}
+.btn{position:absolute;left:max(28px,env(safe-area-inset-left,0px));bottom:max(28px,env(safe-area-inset-bottom,0px));
+  background:var(--ink);color:var(--paper);border:0;border-radius:999px;padding:14px 26px;font:500 20px var(--sans);opacity:.85}
+.btn:focus-visible{outline:3px solid var(--ink-soft);outline-offset:3px}
+/* 막대 */
+.bar{position:absolute;background:var(--ink);border-radius:13px;touch-action:none}
+/* 어른 메뉴 */
+#menu{position:absolute;inset:0;background:var(--paper);overflow:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;
+  padding-block:24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));-webkit-user-select:text;user-select:text}
+#menu .inner{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:28px}
+#menu h1{font:600 22px var(--serif);margin:0;display:flex;justify-content:space-between;align-items:center}
+#menu h2{font:500 14px var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);margin:0 0 10px}
+#menu section{border-top:1px solid var(--ink-faint);padding-top:16px}
+#menu .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:8px}
+#menu .hint{font-size:13px;color:var(--ink-soft);line-height:1.5;margin:6px 0 0}
+#menu input[type=text],#menu select{font:16px var(--sans);padding:8px 10px;border:1px solid var(--ink-faint);border-radius:8px;background:var(--well);color:var(--ink);min-width:0;flex:1}
+#menu button{font:15px var(--sans);padding:8px 14px;border:1px solid var(--ink-soft);border-radius:8px;background:transparent;color:var(--ink)}
+#menu button.primary{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+#menu label.tog{display:flex;gap:10px;align-items:center;font-size:16px}
+#menu .today{font:400 56px var(--serif);line-height:1}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.grid figure{margin:0;background:var(--well);border-radius:10px;overflow:hidden}
+.grid img{width:100%;display:block;aspect-ratio:1}
+.grid figcaption{font-size:12px;color:var(--ink-soft);padding:6px 8px}
+textarea{width:100%;min-height:120px;font:12px ui-monospace,monospace;border:1px solid var(--ink-faint);border-radius:8px;background:var(--well);color:var(--ink)}
+#trigger{position:absolute;top:0;left:0;width:140px;height:140px}
+@media (prefers-reduced-motion:reduce){#adultLayer{transition:none}}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- 홈: 종이 사진 한 장 + 오늘 글자. 30초 아무 입력 없으면 그날 끝. -->
+  <div class="stage on" id="home"><div class="center" id="homeCenter">
+    <div class="paper-photo" id="homePhoto"><div class="empty">오늘 종이</div></div>
+    <div class="big" id="homeSyl">이</div>
+  </div></div>
+
+  <!-- 막대 조립: 실루엣 없음. 끝이 닿으면 '딱' 한 번. 10초면 넘어감. -->
+  <div class="stage" id="bars"></div>
+
+  <!-- 캔버스 -->
+  <div class="stage" id="canvasStage">
+    <div id="canvasWrap">
+      <canvas id="adultLayer"></canvas>
+      <canvas id="poolLayer"></canvas>
+      <canvas id="childLayer"></canvas>
+      <canvas id="siblingLayer"></canvas>
+      <div id="siblingDivider"></div>
+    </div>
+    <button class="btn" id="handoff" hidden>아이 차례</button>
+  </div>
+
+  <!-- 종료: 암전 아님. 종이 사진이 다시. -->
+  <div class="stage" id="ended"><div class="center">
+    <div class="paper-photo" id="endPhoto"><div class="empty">오늘 종이</div></div>
+    <div class="quiet">오늘은 여기까지</div>
+  </div></div>
+
+  <!-- 보관함 -->
+  <div class="stage" id="dormant"><div class="center">
+    <div class="quiet" style="font-size:26px;color:var(--ink)">보관함에 들어갔어요</div>
+    <div class="quiet" style="max-width:480px;text-align:center">14일 동안 열리지 않았어요. 어른이 먼저 종이에 10분 쓰고, 그 뒤에 다시 열어 주세요.</div>
+    <button class="btn" style="position:static" id="undormant">종이에 썼어요</button>
+  </div></div>
+
+  <!-- 어른 메뉴 -->
+  <div class="stage" id="menu"><div class="inner">
+    <h1>어른 메뉴 <button id="menuClose">닫기</button></h1>
+
+    <section>
+      <h2>오늘 글자</h2>
+      <div class="row"><div class="today" id="mToday">이</div><div class="hint" id="mReason" style="margin:0"></div></div>
+      <div class="row"><select id="mManual"><option value="">자동</option></select>
+        <label class="tog"><input type="checkbox" id="mExclude"> 쓰기 목록에서 빼기 (아이가 "안 돼" 반복)</label></div>
+      <p class="hint">이름 음절 우선(아이가 혼자 쓸 수 있는 것 → 받침 없는 분담 → 받침) → ㅏ/ㅓ·ㅗ/ㅜ는 7일 안 짝이 나왔으면 안 꺼냄 → 쓰기 12음절 순환. 봉인·기간 없음.</p>
+    </section>
+
+    <section>
+      <h2>가족 이름 (쉼표로)</h2>
+      <div class="row"><input type="text" id="mNames" placeholder="태이, 루아, 엄마, 아빠"></div>
+      <p class="hint">ㅁ·ㅅ·ㅈ이 든 음절은 어른이 자음을 쓰고 아이는 모음만(분담). 그날 어른 글씨는 사라지지 않음.</p>
+    </section>
+
+    <section>
+      <h2>오늘 어른 (먼저 쓰는 손)</h2>
+      <div class="row"><input type="text" id="mOpenedBy" placeholder="아빠"></div>
+      <div class="row" id="voiceRowAdult"></div>
+      <div class="row" id="voiceRowChild"></div>
+      <label class="tog"><input type="checkbox" id="mPreferChild" checked> 세션에서 아이 목소리 우선</label>
+      <p class="hint" id="voiceHint"></p>
+    </section>
+
+    <section>
+      <h2>어른 글씨가 사라지는 때</h2>
+      <div class="row"><span id="mLife"></span></div>
+      <div class="row"><button id="mLifeMinus">◀ 앞 단계로</button><span id="mLifeStep">0</span><button id="mLifePlus">다음 단계로 ▶</button></div>
+      <p class="hint" id="mOverlap"></p>
+      <p class="hint">1~3세션 안 사라짐(덮어 써도 됨) → 4~6세션 8초 → 7세션부터 3초. 겹침이 높은데 사라지면 "없어졌다! 또!" 놀이가 되니 앞 단계로.</p>
+    </section>
+
+    <section>
+      <h2>오늘 종이</h2>
+      <div class="row">
+        <label class="primary" style="display:inline-block"><input type="file" id="mPaper" accept="image/*" capture="environment" hidden><button type="button" id="mPaperBtn" class="primary">종이 찍기 (잉크만 남김)</button></label>
+        <button id="mPaperClear">사진 지우기</button>
+      </div>
+      <div class="paper-photo" id="mPaperPreview" style="max-width:260px"><div class="empty">없음</div></div>
+      <p class="hint">종이만 나오게 찍기. 찍자마자 흑백 획으로 바꿔 저장하고 원본은 버림. 찍을지는 아이가 고른다.</p>
+    </section>
+
+    <section>
+      <h2>언니·교대</h2>
+      <label class="tog"><input type="checkbox" id="mSibling"> 언니 손 자리 켜기 (왼쪽 1/3, 언니가 켜고 끔)</label>
+      <label class="tog"><input type="checkbox" id="mSwap"> 오늘은 교대일: 아이가 먼저 긋고 어른이 따라 씀</label>
+    </section>
+
+    <section>
+      <h2>일지 (이 기기 안에만)</h2>
+      <div class="row"><span id="mCount"></span><button id="mGallery">모음 보기</button><button id="mCsv">일지 글자로 보기</button></div>
+      <div id="gallery" class="grid" hidden></div>
+      <textarea id="csv" hidden readonly></textarea>
+      <p class="hint">대시보드 없음. 거부율 분모는 '권유한 날'. 목표치 없음. 2주 뒤 한 번 보기.</p>
+    </section>
+
+    <section><p class="hint">학습 효과를 주장하지 않습니다. 아빠가 만들고 싶어서 만든 공책입니다.</p></section>
+  </div></div>
+
+  <div id="trigger"></div>
+</div>
+
+<script>
+// ---------- 설계 불변식 (500명이 끝까지 안 흔든 것) ----------
+const PHILOSOPHY = Object.freeze({ tracing:false, rewards:[], correctness:false, syllableOnly:true, adultFirst:true });
+if (PHILOSOPHY.tracing || PHILOSOPHY.rewards.length || PHILOSOPHY.correctness || !PHILOSOPHY.syllableOnly || !PHILOSOPHY.adultFirst) throw new Error("철학 위반");
+
+const CFG = {
+  ink:"#1B2A4A", paper:"#F4EFE4", inkWidth:22, canvasFraction:2/3,
+  soundDelay:2000, adultLifetime(n){ return n<4?null : n<=6?8000 : 3000; },
+  idleEnd:10000, homeWait:30000, dormantDays:14, barsTimeout:10000,
+  writeList:["가","고","구","기","나","노","누","니","아","오","우","이"],
+  easyOnsets:new Set(["ㄱ","ㄴ","ㅇ"]), easyVowels:new Set(["ㅏ","ㅗ","ㅜ","ㅣ"]),
+  mirror:[["ㅏ","ㅓ"],["ㅗ","ㅜ"]],
+};
+
+// ---------- 저장 ----------
+const S = {
+  get(k,d){ try{ const v=localStorage.getItem("fs."+k); return v==null?d:JSON.parse(v);}catch{ return d; } },
+  set(k,v){ try{ localStorage.setItem("fs."+k, JSON.stringify(v)); }catch{} },
+};
+const settings = {
+  get names(){ return S.get("names","태이,루아,엄마,아빠"); }, set names(v){ S.set("names",v); },
+  get openedBy(){ return S.get("openedBy","아빠"); }, set openedBy(v){ S.set("openedBy",v); },
+  get excluded(){ return S.get("excluded",[]); }, set excluded(v){ S.set("excluded",v); },
+  get manual(){ return S.get("manual",""); }, set manual(v){ S.set("manual",v); },
+  get swap(){ return S.get("swap",false); }, set swap(v){ S.set("swap",v); },
+  get sibling(){ return S.get("sibling",false); }, set sibling(v){ S.set("sibling",v); },
+  get lifeStep(){ return S.get("lifeStep",0); }, set lifeStep(v){ S.set("lifeStep",v); },
+  get preferChild(){ return S.get("preferChild",true); }, set preferChild(v){ S.set("preferChild",v); },
+  get paper(){ return S.get("paper",""); }, set paper(v){ S.set("paper",v); },
+};
+// 세션·음성은 IndexedDB (사진·획 데이터가 커서)
+const DB = (()=>{
+  let db; const open = ()=> new Promise((res,rej)=>{ if(db) return res(db);
+    const r=indexedDB.open("firststroke",1);
+    r.onupgradeneeded=()=>{ const d=r.result; d.createObjectStore("sessions",{keyPath:"id",autoIncrement:true}); d.createObjectStore("voices"); };
+    r.onsuccess=()=>{db=r.result;res(db)}; r.onerror=()=>rej(r.error); });
+  const tx=(store,mode,fn)=>open().then(d=>new Promise((res,rej)=>{ const t=d.transaction(store,mode); const q=fn(t.objectStore(store)); t.oncomplete=()=>res(q&&q.result); t.onerror=()=>rej(t.error); }));
+  return {
+    addSession:(s)=>tx("sessions","readwrite",st=>st.add(s)).catch(()=>{}),
+    allSessions:()=>tx("sessions","readonly",st=>st.getAll()).then(r=>(r||[]).sort((a,b)=>b.date-a.date)).catch(()=>[]),
+    putVoice:(k,blob)=>tx("voices","readwrite",st=>st.put(blob,k)).catch(()=>{}),
+    getVoice:(k)=>tx("voices","readonly",st=>st.get(k)).catch(()=>null),
+    delVoice:(k)=>tx("voices","readwrite",st=>st.delete(k)).catch(()=>{}),
+  };
+})();
+
+// ---------- 한글 분해 ----------
+const ONSETS=[..."ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ"], VOWELS=[..."ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ"], FINALS=[null,..."ㄱㄲㄳㄴㄵㄶㄷㄹㄺㄻㄼㄽㄾㄿㅀㅁㅂㅄㅅㅆㅇㅈㅊㅋㅌㅍㅎ"];
+function decompose(s){ const c=s.codePointAt(0)-0xAC00; if(!(c>=0&&c<=11171)||[...s].length!==1) return null; return {onset:ONSETS[Math.floor(c/588)], vowel:VOWELS[Math.floor((c%588)/28)], final:FINALS[c%28]}; }
+function childCanWrite(d){ return CFG.easyOnsets.has(d.onset)&&CFG.easyVowels.has(d.vowel)&&d.final===null; }
+
+// ---------- 오늘 글자 (규칙 20줄, AI 없음) ----------
+function planToday(sessions){
+  if (settings.manual) return {syllable:settings.manual, shared:false, reason:"어른이 직접 고름"};
+  const weekAgo=Date.now()-7*86400000;
+  const recent=sessions.filter(s=>s.date>weekAgo).map(s=>s.syllable);
+  const recentV=new Set(recent.map(s=>decompose(s)?.vowel).filter(Boolean));
+  const excluded=new Set(settings.excluded);
+  const blocked=s=>{ const v=decompose(s)?.vowel; return CFG.mirror.some(([a,b])=>(v===a&&recentV.has(b))||(v===b&&recentV.has(a))); };
+  const rank=s=>{ const d=decompose(s); return childCanWrite(d)?0 : d.final===null?1:2; };
+  const names=settings.names.split(",").map(x=>x.trim()).filter(Boolean);
+  const seen=new Set(); const nameSyls=[];
+  for(const n of names) for(const ch of n) if(decompose(ch)&&!seen.has(ch)){ seen.add(ch); nameSyls.push(ch); }
+  const cand=nameSyls.filter(s=>!excluded.has(s)&&!recent.includes(s)&&!blocked(s)).sort((a,b)=>rank(a)-rank(b));
+  if(cand.length){ const s=cand[0], can=childCanWrite(decompose(s)); return {syllable:s, shared:!can, reason: can?"이름 음절, 아이가 씀":"이름 음절, 어른이 자음·아이가 모음"}; }
+  const pool=CFG.writeList.filter(s=>!excluded.has(s)&&!blocked(s));
+  const s=pool.find(x=>!recent.includes(x))||pool[0]||"가";
+  return {syllable:s, shared:false, reason:"쓰기 12음절 순환"};
+}
+function barTarget(syl){ const d=decompose(syl); if(!d) return null; if(d.onset==="ㄱ") return "giyeok"; if(d.onset==="ㄴ") return "nieun"; return {"ㅏ":"a","ㅗ":"o","ㅜ":"u"}[d.vowel]||null; }
+
+// ---------- 상태 ----------
+const $=id=>document.getElementById(id);
+let sessions=[], plan=null, current=null, timers={}, stage="home";
+let adultLifetime=3000, leftHanded=false;
+
+function show(id){ document.querySelectorAll(".stage").forEach(e=>e.classList.toggle("on",e.id===id)); stage=id; $("trigger").hidden = !(id==="home"||id==="ended"); }
+function clearTimers(){ for(const k in timers){ clearTimeout(timers[k]); } timers={}; }
+
+// ---------- 소리 ----------
+const Voice = {
+  key:(syl,who)=>`${syl}-${who}`,
+  async has(syl,who){ return !!(await DB.getVoice(this.key(syl,who))); },
+  async play(syl,who){ const b=await DB.getVoice(this.key(syl,who)); if(!b) return false; const u=URL.createObjectURL(b); const a=new Audio(u); a.volume=.6; a.play().catch(()=>{}); a.onended=()=>URL.revokeObjectURL(u); return true; },
+  async playForSession(syl){ if(settings.preferChild && await this.play(syl,"child")) return; if(await this.play(syl,"adult")) return; this.tts(syl); },
+  tts(syl){ try{ const u=new SpeechSynthesisUtterance(syl); u.lang="ko-KR"; u.rate=.9; u.volume=.6; speechSynthesis.speak(u);}catch{} },
+  canRecord(){ return !!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder); },
+  async record(syl,who){ const stream=await navigator.mediaDevices.getUserMedia({audio:true}); const rec=new MediaRecorder(stream); const chunks=[]; rec.ondataavailable=e=>chunks.push(e.data);
+    return new Promise(res=>{ rec.onstop=async()=>{ stream.getTracks().forEach(t=>t.stop()); await DB.putVoice(this.key(syl,who), new Blob(chunks,{type:rec.mimeType||"audio/mp4"})); res(); }; rec.start(); setTimeout(()=>rec.state!=="inactive"&&rec.stop(),3000); }); },
+};
+function tick(){ try{ const ac=new (window.AudioContext||window.webkitAudioContext)(); const o=ac.createOscillator(), g=ac.createGain(); o.frequency.value=1200; g.gain.setValueAtTime(.15,ac.currentTime); g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.08); o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime+.09);}catch{} }
+
+// ---------- 종이 사진 ----------
+function renderPaper(){ const src=settings.paper; for(const id of ["homePhoto","endPhoto","mPaperPreview"]){ const el=$(id); el.innerHTML=""; if(src){ const i=new Image(); i.src=src; el.appendChild(i);} else { const d=document.createElement("div"); d.className="empty"; d.textContent=id==="mPaperPreview"?"없음":"오늘 종이"; el.appendChild(d);} } }
+function inkOnly(file){ return new Promise(res=>{ const i=new Image(); i.onload=()=>{ const max=1000, k=Math.min(1,max/Math.max(i.width,i.height)); const c=document.createElement("canvas"); c.width=i.width*k|0; c.height=i.height*k|0; const x=c.getContext("2d"); x.drawImage(i,0,0,c.width,c.height);
+  const d=x.getImageData(0,0,c.width,c.height), p=d.data; let sum=0; for(let j=0;j<p.length;j+=4) sum+=(p[j]*.3+p[j+1]*.59+p[j+2]*.11); const mean=sum/(p.length/4), thr=mean*.72; // 종이 평균보다 어두운 것만 잉크
+  for(let j=0;j<p.length;j+=4){ const l=p[j]*.3+p[j+1]*.59+p[j+2]*.11; const ink=l<thr; p[j]=ink?0x1B:0xF4; p[j+1]=ink?0x2A:0xEF; p[j+2]=ink?0x4A:0xE4; p[j+3]=255; }
+  x.putImageData(d,0,0); URL.revokeObjectURL(i.src); res(c.toDataURL("image/png")); }; i.src=URL.createObjectURL(file); }); }
+
+// ---------- 캔버스 ----------
+const CV = (()=>{
+  const wrap=$("canvasWrap"), adult=$("adultLayer"), pool=$("poolLayer"), child=$("childLayer"), sib=$("siblingLayer"), div=$("siblingDivider");
+  let dpr=1, W=0, H=0, rect={x:0,y:0,w:0,h:0}, sibRect={x:0,y:0,w:0,h:0};
+  let mode="adult", strokes=[], cur=null, adultStrokes=[], penLifts=0, turns=0, decided=false, lastPenTime=0, sharedWriting=false;
+  let onPenUp=null, onIdle=null, onHandoff=null;
+  function layout(){ dpr=Math.min(2,devicePixelRatio||1); W=wrap.clientWidth; H=wrap.clientHeight;
+    const w=W*CFG.canvasFraction; rect={x:leftHanded?0:W-w, y:0, w, h:H}; sibRect={x:leftHanded?w:0,y:0,w:W-w,h:H};
+    for(const c of [adult,pool,child,sib]){ c.width=W*dpr; c.height=H*dpr; c.style.width=W+"px"; c.style.height=H+"px"; }
+    div.style.left=(leftHanded?w-1:W-w-1)+"px"; div.style.display=settings.sibling?"block":"none"; redrawAll(); }
+  addEventListener("resize",layout);
+  function ctx(c){ const x=c.getContext("2d"); x.setTransform(dpr,0,0,dpr,0,0); x.lineCap="round"; x.lineJoin="round"; x.strokeStyle=CFG.ink; x.lineWidth=CFG.inkWidth; return x; }
+  function drawStroke(x,pts){ if(pts.length<2){ if(pts.length===1){ x.beginPath(); x.arc(pts[0].x,pts[0].y,CFG.inkWidth/2,0,7); x.fillStyle=CFG.ink; x.fill(); } return; } x.beginPath(); x.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++){ const m={x:(pts[i-1].x+pts[i].x)/2,y:(pts[i-1].y+pts[i].y)/2}; x.quadraticCurveTo(pts[i-1].x,pts[i-1].y,m.x,m.y);} x.lineTo(pts.at(-1).x,pts.at(-1).y); x.stroke(); }
+  function redrawAll(){ const xc=ctx(child); xc.clearRect(0,0,W,H); for(const s of strokes) drawStroke(xc,s); const xa=ctx(adult); xa.clearRect(0,0,W,H); for(const s of adultStrokes) drawStroke(xa,s); }
+  function inRect(r,x,y){ return x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h; }
+  function pos(e){ const b=wrap.getBoundingClientRect(); return {x:e.clientX-b.left,y:e.clientY-b.top,t:performance.now()}; }
+  // 입력: 펜 우선, 손가락 허용. 펜을 쓴 직후 2초 안의 넓은 터치(손바닥)는 무시.
+  function accept(e){ if(e.pointerType==="pen"){ lastPenTime=performance.now(); return true; } if(e.pointerType==="touch"){ if(performance.now()-lastPenTime<2000) return false; if((e.width||0)>40) return false; return true; } return e.pointerType==="mouse"; }
+  const active={};
+  wrap.addEventListener("pointerdown",e=>{ if(!accept(e)) return; const p=pos(e);
+    const target = settings.sibling && inRect(sibRect,p.x,p.y) ? "sib" : inRect(rect,p.x,p.y) ? "main" : null; if(!target) return;
+    e.preventDefault(); wrap.setPointerCapture?.(e.pointerId);
+    active[e.pointerId]={target,pts:[p]}; clearTimeout(timers.idle); clearTimeout(timers.sound);
+    if(target==="main" && mode==="child" && !decided) decided=false;
+  });
+  wrap.addEventListener("pointermove",e=>{ const a=active[e.pointerId]; if(!a) return; const p=pos(e); a.pts.push(p);
+    const x=ctx(a.target==="sib"?sib:(mode==="adult"?adult:child)); if(a.target==="sib"){ x.strokeStyle="rgba(27,42,74,.7)"; x.lineWidth=CFG.inkWidth*.8; }
+    const n=a.pts.length; if(n>=2){ x.beginPath(); x.moveTo(a.pts[n-2].x,a.pts[n-2].y); x.lineTo(p.x,p.y); x.stroke(); } });
+  function endStroke(e){ const a=active[e.pointerId]; if(!a) return; delete active[e.pointerId]; if(a.target==="sib") return;
+    const pts=a.pts; if(mode==="adult"){ adultStrokes.push(pts); } else { strokes.push(pts); penLifts++; turns+=countTurns(pts); decideHand(pts); inkPool(pts); }
+    redrawAll();
+    if(mode==="child") timers.sound=setTimeout(()=>onPenUp&&onPenUp(), CFG.soundDelay);
+    timers.idle=setTimeout(()=>onIdle&&onIdle(), CFG.idleEnd);
+  }
+  wrap.addEventListener("pointerup",endStroke); wrap.addEventListener("pointercancel",endStroke);
+  // 꺾임 = 속도 최소점 + 방향 전환 (각도 60° 초과). 획이 끝난 뒤에만. 즉시 반응 없음.
+  function countTurns(pts){ let t=0, prev=null; for(let i=1;i<pts.length;i++){ const dx=pts[i].x-pts[i-1].x, dy=pts[i].y-pts[i-1].y, L=Math.hypot(dx,dy); if(L<1.5) continue; const d={x:dx/L,y:dy/L}; if(prev){ const dot=prev.x*d.x+prev.y*d.y; if(dot<.5){ t++; prev=null; continue; } } prev=d; } return t; }
+  function decideHand(pts){ if(decided||pts.length<4) return; const a=pts[0], b=pts.at(-1); if(Math.abs(b.x-a.x)>40 && Math.abs(b.x-a.x)>Math.abs(b.y-a.y)){ decided=true; if(b.x<a.x){ leftHanded=true; layout(); } } }
+  // 먹 고임: 끝에서 0.3초 이상 머문 자리만 +4pt. 떨림은 보상 안 함.
+  function inkPool(pts){ const end=pts.at(-1); let dwell=0; for(let i=pts.length-1;i>=0;i--){ if(Math.hypot(pts[i].x-end.x,pts[i].y-end.y)>6) break; dwell=end.t-pts[i].t; } if(dwell<300) return; const x=ctx(pool); x.fillStyle=CFG.ink; x.globalAlpha=0; x.beginPath(); x.arc(end.x,end.y,CFG.inkWidth/2+4,0,7); x.globalAlpha=1; x.fill(); }
+  function overlap(){ const A=adultStrokes.flat(), C=strokes.flat(); if(!A.length||!C.length) return 0; const r=CFG.inkWidth; let near=0; for(let i=0;i<C.length;i+=2){ if(A.some(a=>Math.hypot(a.x-C[i].x,a.y-C[i].y)<r)) near++; } return near/Math.ceil(C.length/2); }
+  function reset(){ strokes=[]; adultStrokes=[]; penLifts=0; turns=0; decided=false; clearTimeout(timers.idle); clearTimeout(timers.sound); clearTimeout(timers.fade); adult.style.opacity=1; for(const c of [adult,pool,child,sib]) ctx(c).clearRect(0,0,W,H); }
+  function setMode(m){ mode=m; clearTimeout(timers.idle); clearTimeout(timers.sound); $("handoff").hidden = m!=="adult"; }
+  function showAdult(strokesIn, lifetime){ adultStrokes=strokesIn; adult.style.opacity=1; redrawAll(); clearTimeout(timers.fade); if(lifetime!=null && !sharedWriting) timers.fade=setTimeout(()=>{ adult.style.opacity=0; }, lifetime); }
+  // 두 손가락 더블탭 = 어른 획 다시 보기 (재요청 횟수 기록)
+  let tapTimes=[]; wrap.addEventListener("touchstart",e=>{ if(e.touches.length===2){ const now=performance.now(); tapTimes=tapTimes.filter(t=>now-t<400); tapTimes.push(now); if(tapTimes.length>=2){ tapTimes=[]; if(mode==="child"&&adultStrokes.length){ if(current) current.adultReplays++; showAdult(adultStrokes, adultLifetime); } } } },{passive:true});
+  return { layout, reset, setMode, showAdult, overlap, get strokes(){return strokes;}, get adultStrokes(){return adultStrokes;}, get penLifts(){return penLifts;}, get turns(){return turns;},
+    set sharedWriting(v){ sharedWriting=v; }, set onPenUp(f){onPenUp=f;}, set onIdle(f){onIdle=f;}, thumbnail(){ const c=document.createElement("canvas"); c.width=300; c.height=300; const x=c.getContext("2d"); x.fillStyle=CFG.paper; x.fillRect(0,0,300,300); x.strokeStyle=CFG.ink; x.lineCap="round"; x.lineJoin="round"; const k=300/Math.max(rect.w,rect.h); x.lineWidth=CFG.inkWidth*k; for(const s of strokes){ x.beginPath(); s.forEach((p,i)=>{ const px=(p.x-rect.x)*k, py=(p.y-rect.y)*k; i?x.lineTo(px,py):x.moveTo(px,py); }); x.stroke(); } return c.toDataURL("image/png"); } };
+})();
+
+// ---------- 막대 조립 ----------
+function runBars(target, done){
+  const st=$("bars"); st.innerHTML=""; show("bars");
+  const L=220, Sh=110, T=26, W=st.clientWidth, H=st.clientHeight;
+  const spec={ giyeok:[[1,L],[0,L]], nieun:[[0,L],[1,L]], a:[[0,L],[1,Sh]], o:[[0,Sh],[1,L]], u:[[1,L],[0,Sh]] }[target];
+  const p=[{x:W*.3,y:H*.45},{x:W*.65,y:H*.6}]; let snapped=false;
+  const bars=spec.map((s,i)=>{ const b=document.createElement("div"); b.className="bar"; b.style.width=(s[0]?s[1]:T)+"px"; b.style.height=(s[0]?T:s[1])+"px"; st.appendChild(b); return b; });
+  const place=()=>bars.forEach((b,i)=>{ const s=spec[i]; b.style.left=(p[i].x-(s[0]?s[1]:T)/2)+"px"; b.style.top=(p[i].y-(s[0]?T:s[1])/2)+"px"; });
+  const end=(c,s,side)=> s[0]?{x:c.x+side*s[1]/2,y:c.y}:{x:c.x,y:c.y+side*s[1]/2};
+  const join=()=>{ switch(target){ case "giyeok": return [end(p[0],spec[0],1),end(p[1],spec[1],-1)]; case "nieun": return [end(p[0],spec[0],1),end(p[1],spec[1],-1)]; case "a": return [p[0],end(p[1],spec[1],-1)]; case "o": return [end(p[0],spec[0],1),p[1]]; case "u": return [p[0],end(p[1],spec[1],-1)]; } };
+  place();
+  bars.forEach((b,i)=>{ let drag=null; b.addEventListener("pointerdown",e=>{ if(snapped) return; b.setPointerCapture(e.pointerId); drag={dx:e.clientX-p[i].x,dy:e.clientY-p[i].y}; });
+    b.addEventListener("pointermove",e=>{ if(!drag) return; p[i]={x:e.clientX-drag.dx,y:e.clientY-drag.dy}; place(); });
+    const up=()=>{ if(!drag) return; drag=null; const [a,c]=join(); if(Math.hypot(a.x-c.x,a.y-c.y)<30){ p[1]={x:p[1].x+(a.x-c.x),y:p[1].y+(a.y-c.y)}; place(); snapped=true; tick(); clearTimeout(timers.bars); setTimeout(done,2000); } };
+    b.addEventListener("pointerup",up); b.addEventListener("pointercancel",up); });
+  timers.bars=setTimeout(done, CFG.barsTimeout);
+}
+
+// ---------- 흐름 ----------
+async function boot(){
+  sessions=await DB.allSessions(); plan=planToday(sessions);
+  $("homeSyl").textContent=plan.syllable; renderPaper(); CV.layout();
+  const last=sessions[0]?.date; if(last && Date.now()-last>CFG.dormantDays*86400000){ show("dormant"); return; }
+  goHome();
+}
+function goHome(){ clearTimers(); plan=planToday(sessions); $("homeSyl").textContent=plan.syllable; show("home");
+  timers.home=setTimeout(()=>{ /* 켜기 전 거부권: 아이가 안 오면 그날 끝 */ show("ended"); }, CFG.homeWait); }
+$("homeCenter").addEventListener("pointerup",()=>{ if(stage!=="home") return; startSession(); });
+$("ended").addEventListener("pointerup",()=>{ if(stage==="ended") goHome(); });
+$("undormant").addEventListener("click",goHome);
+
+function startSession(){ clearTimers(); document.documentElement.requestFullscreen?.().catch(()=>{});
+  current={ date:Date.now(), syllable:plan.syllable, openedBy:settings.openedBy, note: plan.shared?"분담":(settings.swap?"교대일":""), adultReplays:0 };
+  adultLifetime = CFG.adultLifetime(sessions.length+1+settings.lifeStep);
+  CV.sharedWriting = plan.shared && !settings.manual; CV.reset();
+  const t=barTarget(plan.syllable); if(t) runBars(t, startWriting); else startWriting(); }
+function startWriting(){ show("canvasStage"); CV.layout(); if(settings.swap){ CV.setMode("child"); } else { CV.setMode("adult"); } }
+$("handoff").addEventListener("click",()=>{ if(settings.swap){ endSession(); return; } const a=CV.adultStrokes.slice(); CV.setMode("child"); CV.showAdult(a, adultLifetime); });
+CV.onPenUp=()=>Voice.playForSession(plan.syllable);
+CV.onIdle=()=>{ if($("handoff").hidden===false){ /* 어른 모드 idle → 아이 차례 */ $("handoff").click(); return; } endChild(); };
+function endChild(){ if(!current){ show("ended"); return; }
+  Object.assign(current,{ strokeCount:CV.strokes.length, penLifts:CV.penLifts, turnCount:CV.turns, overlap:CV.overlap(), endedBy:"시간", thumb:CV.thumbnail(), strokes:CV.strokes.map(s=>s.map(p=>[Math.round(p.x),Math.round(p.y),Math.round(p.t)])) });
+  if(settings.swap){ // 교대일: 아이 다음에 어른이 아이 획을 보며 따라 씀. 어른 획은 저장 안 함.
+    const childStrokes=CV.strokes.slice(); CV.setMode("adult"); CV.showAdult(childStrokes, null); $("handoff").textContent="다 썼어"; return; }
+  endSession(); }
+async function endSession(){ clearTimers(); $("handoff").textContent="아이 차례"; if(current){ await DB.addSession(current); sessions=await DB.allSessions(); current=null; } show("ended"); }
+
+// ---------- 어른 메뉴 (좌상단 3초 누르기, 홈·종료 화면에서만) ----------
+let pressT=null; const trig=$("trigger");
+trig.addEventListener("pointerdown",()=>{ pressT=setTimeout(openMenu,3000); }); ["pointerup","pointercancel","pointerleave"].forEach(ev=>trig.addEventListener(ev,()=>clearTimeout(pressT)));
+async function openMenu(){ clearTimers(); show("menu"); const p=planToday(sessions);
+  $("mToday").textContent=settings.manual||p.syllable; $("mReason").textContent=settings.manual?"어른이 직접 고름":p.reason+(p.shared?" (분담)":"");
+  const sel=$("mManual"); sel.innerHTML='<option value="">자동</option>'+CFG.writeList.map(s=>`<option value="${s}">${s}</option>`).join(""); sel.value=settings.manual;
+  $("mExclude").checked=settings.excluded.includes(settings.manual||p.syllable);
+  $("mNames").value=settings.names; $("mOpenedBy").value=settings.openedBy; $("mPreferChild").checked=settings.preferChild;
+  $("mSibling").checked=settings.sibling; $("mSwap").checked=settings.swap; $("mLifeStep").textContent=settings.lifeStep;
+  const n=sessions.length+1+settings.lifeStep, life=CFG.adultLifetime(n); $("mLife").textContent= life==null?"지금: 안 사라짐 (덮어 써도 됨)":`지금: ${life/1000}초 뒤 사라짐`;
+  $("mOverlap").textContent="최근 겹침: "+(sessions.slice(0,5).map(s=>Math.round((s.overlap||0)*100)+"%").join(" · ")||"아직 없음");
+  $("mCount").textContent=`세션 ${sessions.length}회`; $("gallery").hidden=true; $("csv").hidden=true;
+  await renderVoiceRows(settings.manual||p.syllable); }
+$("menuClose").addEventListener("click",()=>{ settings.names=$("mNames").value; settings.openedBy=$("mOpenedBy").value||"아빠"; goHome(); });
+$("mManual").addEventListener("change",e=>{ settings.manual=e.target.value; openMenu(); });
+$("mExclude").addEventListener("change",e=>{ const s=$("mToday").textContent; const ex=new Set(settings.excluded); e.target.checked?ex.add(s):ex.delete(s); settings.excluded=[...ex]; });
+$("mPreferChild").addEventListener("change",e=>settings.preferChild=e.target.checked);
+$("mSibling").addEventListener("change",e=>{ settings.sibling=e.target.checked; CV.layout(); });
+$("mSwap").addEventListener("change",e=>settings.swap=e.target.checked);
+$("mLifeMinus").addEventListener("click",()=>{ settings.lifeStep=settings.lifeStep-1; openMenu(); });
+$("mLifePlus").addEventListener("click",()=>{ settings.lifeStep=settings.lifeStep+1; openMenu(); });
+$("mPaperBtn").addEventListener("click",()=>$("mPaper").click());
+$("mPaper").addEventListener("change",async e=>{ const f=e.target.files[0]; if(!f) return; settings.paper=await inkOnly(f); renderPaper(); e.target.value=""; });
+$("mPaperClear").addEventListener("click",()=>{ settings.paper=""; renderPaper(); });
+$("mGallery").addEventListener("click",()=>{ const g=$("gallery"); g.hidden=!g.hidden; if(!g.hidden){ g.innerHTML=sessions.map(s=>`<figure><img src="${s.thumb||""}" alt=""><figcaption>${s.syllable} · ${new Date(s.date).toLocaleDateString("ko-KR",{month:"numeric",day:"numeric"})}${s.note?" · "+s.note:""}</figcaption></figure>`).join("")||'<p class="hint">아직 없음</p>'; } });
+$("mCsv").addEventListener("click",()=>{ const t=$("csv"); t.hidden=!t.hidden; t.value=["date,syllable,openedBy,endedBy,strokes,penLifts,turns,adultReplays,overlap,note",...sessions.map(s=>[new Date(s.date).toISOString(),s.syllable,s.openedBy,s.endedBy,s.strokeCount,s.penLifts,s.turnCount,s.adultReplays,(s.overlap||0).toFixed(2),(s.note||"").replace(/,/g," ")].join(","))].join("\n"); });
+
+async function renderVoiceRows(syl){
+  for(const [who,label,row] of [["adult","어른","voiceRowAdult"],["child","아이","voiceRowChild"]]){
+    const has=await Voice.has(syl,who); const r=$(row); r.innerHTML="";
+    const mk=(t,fn,cls="")=>{ const b=document.createElement("button"); b.textContent=t; b.className=cls; b.addEventListener("click",fn); r.appendChild(b); };
+    if(Voice.canRecord()) mk(`${label} '${syl}' 3초 녹음`, async()=>{ try{ await Voice.record(syl,who); }catch{ $("voiceHint").textContent="마이크를 쓸 수 없어요. 아래 '파일로 올리기'를 쓰세요."; } renderVoiceRows(syl); }, who==="adult"?"primary":"");
+    const lab=document.createElement("label"); lab.innerHTML=`<input type="file" accept="audio/*" hidden><button type="button">${label} 소리 파일로 올리기</button>`; lab.querySelector("button").addEventListener("click",()=>lab.querySelector("input").click());
+    lab.querySelector("input").addEventListener("change",async e=>{ const f=e.target.files[0]; if(f){ await DB.putVoice(Voice.key(syl,who),f); renderVoiceRows(syl);} }); r.appendChild(lab);
+    if(has){ mk("들어보기",()=>Voice.play(syl,who)); mk("지우기",async()=>{ await DB.delVoice(Voice.key(syl,who)); renderVoiceRows(syl); }); }
+  }
+  $("voiceHint").textContent = Voice.canRecord() ? "자연 길이로 한 번만. 그날 어른이 즉석 녹음. 아이 것은 놀다가 그 소리를 낼 때. 녹음이 없으면 기기 음성이 대신 읽어요." : "이 화면에서는 마이크를 못 써요. 아이폰 음성 메모로 '이' 한 번 녹음해서 파일로 올리면 됩니다. 없으면 기기 음성이 대신 읽어요.";
+}
+
+boot();
+</script>
+
+</body>
+</html>
