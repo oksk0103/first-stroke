@@ -44,6 +44,7 @@ canvas{position:absolute;top:0;left:0;touch-action:none}
 .btn:focus-visible{outline:3px solid var(--ink-soft);outline-offset:3px}
 /* 막대 */
 .bar{position:absolute;background:var(--ink);border-radius:13px;touch-action:none}
+.barHint{position:absolute;left:0;right:0;bottom:max(20px,env(safe-area-inset-bottom,0px));text-align:center;color:var(--ink-soft);font-size:15px;pointer-events:none}
 /* 어른 메뉴 */
 #menu{position:absolute;inset:0;background:var(--paper);overflow:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;
   padding-block:24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));-webkit-user-select:text;user-select:text}
@@ -320,7 +321,7 @@ const CV = (()=>{
 
 // ---------- 막대 조립 ----------
 function runBars(target, done){
-  const st=$("bars"); st.innerHTML=""; show("bars");
+  const st=$("bars"); st.innerHTML='<div class="barHint">막대 두 개를 끌어서 붙여 보세요 · 안 붙여도 10초 뒤 넘어가요</div>'; show("bars");
   const L=220, Sh=110, T=26, W=st.clientWidth, H=st.clientHeight;
   const spec={ giyeok:[[1,L],[0,L]], nieun:[[0,L],[1,L]], a:[[0,L],[1,Sh]], o:[[0,Sh],[1,L]], u:[[1,L],[0,Sh]] }[target];
   const p=[{x:W*.3,y:H*.45},{x:W*.65,y:H*.6}]; let snapped=false;
