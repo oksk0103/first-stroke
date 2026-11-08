@@ -413,7 +413,11 @@ function clearTimers(){ for(const k in timers){ clearTimeout(timers[k]); } timer
 const Voice = {
   key:(syl,who)=>`${syl}-${who}`,
   async has(syl,who){ return !!(await DB.getVoice(this.key(syl,who))); },
-  async play(syl,who){ const b=await DB.getVoice(this.key(syl,who)); if(!b) return false; const u=URL.createObjectURL(b); const a=new Audio(u); a.volume=.6; a.play().catch(()=>{}); a.onended=()=>URL.revokeObjectURL(u); return true; },
+  // 재생은 Web Audio로: iOS 사파리는 <audio>.play()를 '누른 그 순간'이 아니면 막는다(녹음 3초 뒤, 펜 떼고 2초 뒤 재생이 안 되던 원인).
+  // 첫 터치 때 오디오를 열어 두면(unlockAudio) 그 뒤로는 언제든 재생된다.
+  async play(syl,who){ const b=await DB.getVoice(this.key(syl,who)); if(!b) return false;
+    try{ const ac=audioCtx(); if(ac.state!=="running") await ac.resume().catch(()=>{}); const buf=await ac.decodeAudioData(await b.arrayBuffer()); const src=ac.createBufferSource(); src.buffer=buf; src.connect(ac.destination); src.start(); return true; }
+    catch{ const u=URL.createObjectURL(b); const a=new Audio(u); a.play().catch(()=>{}); a.onended=()=>URL.revokeObjectURL(u); return true; } },
   async playForSession(syl){ if(settings.preferChild && await this.play(syl,"child")) return; if(await this.play(syl,"p:"+settings.openedBy)) return; if(await this.play(syl,"adult")) return; this.tts(syl); },
   tts(syl){ try{ let text=syl, lang="ko-KR"; if(/^[A-Z]$/.test(syl)) lang="en-US"; else if(CFG.numWords[syl]) text=CFG.numWords[syl]; const u=new SpeechSynthesisUtterance(text); u.lang=lang; u.rate=.9; u.volume=.6; speechSynthesis.speak(u);}catch{} },
   canRecord(){ return !!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder); },
@@ -424,6 +428,10 @@ const Voice = {
       rec.start(); setTimeout(()=>rec.state!=="inactive"&&rec.stop(),3000); }); },   // 다른 화면으로 가면 녹음 취소(마이크도 끔)
 };
 let AC=null;
+function audioCtx(){ return AC=AC||new (window.AudioContext||window.webkitAudioContext)(); }
+// 첫 터치마다 오디오를 깨워 둔다(iOS 자동재생 제한 풀기). 무음 한 번 + 말하기 엔진도 한 번 깨움.
+let audioUnlocked=false;
+document.addEventListener("pointerdown",()=>{ try{ const ac=audioCtx(); if(ac.state!=="running") ac.resume(); if(!audioUnlocked){ audioUnlocked=true; const b=ac.createBuffer(1,1,22050), s=ac.createBufferSource(); s.buffer=b; s.connect(ac.destination); s.start(0); try{ const u=new SpeechSynthesisUtterance(" "); u.volume=0; speechSynthesis.speak(u); }catch{} } }catch{} },{capture:true,passive:true});
 function tick(){ try{ const ac=AC=AC||new (window.AudioContext||window.webkitAudioContext)(); if(ac.state==="suspended") ac.resume(); const o=ac.createOscillator(), g=ac.createGain(); o.frequency.value=1200; g.gain.setValueAtTime(.15,ac.currentTime); g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.08); o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime+.09);}catch{} }
 
 // ---------- 종이 사진 ----------
@@ -460,7 +468,7 @@ const CV = (()=>{
   // 사각사각: 종이에 붓이 스치는 소리. 결과음이 아니라 재질음 — 움직일 때만, 속도에 비례, 멈추면 바로 잦아든다
   const Scratch=(()=>{ let g=null, lastT=0; function ensure(){ if(g) return true; try{ const ac=AC=AC||new (window.AudioContext||window.webkitAudioContext)(); if(ac.state==="suspended") ac.resume(); const n=ac.createBuffer(1,ac.sampleRate*2,ac.sampleRate); const d=n.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1; const src=ac.createBufferSource(); src.buffer=n; src.loop=true; const bp=ac.createBiquadFilter(); bp.type="bandpass"; bp.frequency.value=2600; bp.Q.value=0.7; g=ac.createGain(); g.gain.value=0; src.connect(bp).connect(g).connect(ac.destination); src.start(); return true; }catch{ return false; } }
     return { warm(){ if(settings.scratch) ensure(); }, move(v){ if(!settings.scratch||!ensure()) return; if(AC.state==="suspended") AC.resume(); clearTimeout(timers.acSleep); const target=Math.min(0.09, v*0.02); g.gain.setTargetAtTime(target, AC.currentTime, 0.03); lastT=performance.now(); clearTimeout(timers.scratch); timers.scratch=setTimeout(()=>this.stop(),90); },
-      stop(){ if(!g) return; g.gain.setTargetAtTime(0, AC.currentTime, 0.05); clearTimeout(timers.acSleep); timers.acSleep=setTimeout(()=>{ if(AC&&AC.state==="running") AC.suspend(); },1500); } }; })();   // 1.5초 조용하면 오디오를 재운다(배터리)
+      stop(){ if(!g) return; g.gain.setTargetAtTime(0, AC.currentTime, 0.05); } }; })();   // 오디오는 재우지 않는다(iOS는 다시 깨우려면 터치가 필요). 앱이 뒤로 가면 visibilitychange에서 재움
   // 입력: 펜 우선, 손가락 허용. 펜을 쓴 직후 2초 안의 넓은 터치(손바닥)는 무시.
   function accept(e){ if(e.pointerType==="pen"){ lastPenTime=performance.now(); return true; } if(e.pointerType==="touch"){ if(Object.values(active).some(a=>a.pen)) return false; if(lastPenTime && performance.now()-lastPenTime<2000 && (e.width||0)>40) return false; return true; } return e.pointerType==="mouse"; }   // 손바닥 무시: 펜이 닿아 있는 동안, 또는 펜 직후 2초의 넓은 터치. 펜 없이 손가락만 쓰면 전부 받는다.
   const active={};
