@@ -51,9 +51,10 @@ def bar_top_edge(path, bb, tick=True):
         elif inside: break
     if top is None: return None
     # 막대 위로 좁은 구간(꼭지) 끝 찾기
-    narrow_end=top
+    # 꼭지는 가운데에 있으니 가운데 띠(폭 50%)만 본다 — 막대 왼끝의 붓 들어가는 어깨에 속지 않게
+    narrow_end=top; cx=(x0+x1)/2
     for y in range(top, int(y1), step):
-        b=cover(path, x0-1, y, x1+1, y+step)
+        b=cover(path, cx-gw*0.25, y, cx+gw*0.25, y+step)
         if b and (b[2]-b[0])<gw*0.3: narrow_end=y+step
         else: break
     return narrow_end if tick else top-9   # ㅗ: 꼭지 윗선에서 잘라 꼭지는 모음 조각 / ㅜ: 막대 윗선 살짝 아래(초성 줄기가 막대에 붙는 어깨가 모음 조각에 남지 않게)
@@ -92,7 +93,7 @@ for syl in SYLS:
     for i,p in enumerate(pieces):
         for c in contours_of(p):
             b=c.bounds
-            if (b[2]-b[0])<gw_*0.12 and (b[3]-b[1])<gh_*0.12: crumbs.append((i,c))
+            if (b[2]-b[0])<gw_*0.22 and (b[3]-b[1])<gh_*0.12: crumbs.append((i,c))   # 납작한 조각(ㅅ 다리 끝, 서리프)
             else: big[i].append(c)
     for i,c in crumbs:
         cb=center(c.bounds)
