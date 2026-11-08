@@ -9,7 +9,7 @@ from fontTools.pens.svgPathPen import SVGPathPen
 import pathops
 
 FONT = sys.argv[1] if len(sys.argv) > 1 else "fonts/RIDIBatang.otf"
-SYLS = list("가고구기나노누니아오우이") + list("태루마빠엄")  # 쓰기 12 + 이름 음절
+SYLS = list("가고구기나노누니아오우이") + list("마모무미사소수시") + list("태루빠엄")  # 쓰기 12 + 확장 1단계(ㅁㅅ) + 이름 음절
 ONSETS=list("ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ"); VOWELS=list("ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ")
 def decompose(s):
     c=ord(s)-0xAC00; return ONSETS[c//588], VOWELS[(c%588)//28], c%28
