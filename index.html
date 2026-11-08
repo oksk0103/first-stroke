@@ -37,12 +37,12 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);o
 /* 종이 더미 = 내 글씨 책 입구 (숫자·날짜 없음). 홈 왼쪽 아래 */
 #pile{position:absolute;left:max(28px,env(safe-area-inset-left,0px));bottom:max(28px,env(safe-area-inset-bottom,0px));width:min(140px,22vw);aspect-ratio:1;touch-action:none;cursor:pointer}
 #pile .sheet{position:absolute;inset:0;border-radius:6px;background:var(--paper);box-shadow:0 1px 2px rgba(27,42,74,.18),0 0 0 1px rgba(27,42,74,.08);overflow:hidden}
-#pile .sheet img{width:100%;height:100%;object-fit:contain;display:block}
+#pile .sheet img{width:100%;height:100%;object-fit:contain;display:block;pointer-events:none;-webkit-user-drag:none}
 #pile .sheet:nth-child(1){transform:rotate(-6deg) translate(-6px,4px)} #pile .sheet:nth-child(2){transform:rotate(3deg) translate(5px,-2px)} #pile .sheet:nth-child(3){transform:rotate(-1deg)}
 /* 내 글씨 책: 한 장에 종이 한 장. 좌우 넘김만. 마지막은 빈 종이 → 홈 */
 #book{background:var(--paper);touch-action:none}
 #book .page{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
-#book .page img{width:min(78vw,78vh);height:min(78vw,78vh);object-fit:contain;image-rendering:auto;border-radius:10px;box-shadow:0 2px 12px rgba(27,42,74,.10)}
+#book .page img{pointer-events:none;-webkit-user-drag:none;user-select:none;width:min(78vw,78vh);height:min(78vw,78vh);object-fit:contain;image-rendering:auto;border-radius:10px;box-shadow:0 2px 12px rgba(27,42,74,.10)}
 #book .page.blank .sheet{width:min(78vw,78vh);height:min(78vw,78vh);border-radius:10px;background:var(--well)}
 /* 종료 예고: 9초째부터 종이가 천천히 어두워지고, 접혀서 더미로 */
 #canvasStage{transition:filter 2.5s ease,transform .7s cubic-bezier(.4,0,.6,1),opacity .7s ease;transform-origin:8% 96%}
