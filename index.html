@@ -59,6 +59,8 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);o
 #names div{cursor:pointer;padding:4px 8px;touch-action:manipulation}
 #names{color:var(--ink-soft)}
 /* 종료 화면 녹음: 길게(1초) 눌러야 시작 — 아이가 톡톡 눌러도 아무 일 없음 */
+#micRow{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:center}
+#endPlay{font:inherit;font-size:17px;padding:12px 22px;min-height:48px;border-radius:999px;border:0;background:var(--ink);color:var(--paper);cursor:pointer;touch-action:manipulation}
 #endMic{display:flex;align-items:center;gap:10px;padding:12px 20px;border-radius:999px;border:1px solid var(--ink-faint);color:var(--ink-soft);font-size:15px;touch-action:none;user-select:none;cursor:pointer;position:relative;overflow:hidden}
 #endMic .dot{width:12px;height:12px;border-radius:50%;background:var(--ink-soft)}
 #endMic::before{content:"";position:absolute;inset:0;background:var(--ink-faint);transform:scaleX(0);transform-origin:left}
@@ -180,7 +182,7 @@ textarea{width:100%;min-height:120px;font:12px ui-monospace,monospace;border:1px
     <div id="endSheet" hidden><img alt=""></div>
     <div id="sealHint" hidden>종이를 꾹 누르면 도장이 찍혀요</div>
     <div id="names"></div>
-    <div id="endMic" hidden><span class="dot"></span><span class="lab"></span></div>
+    <div id="micRow"><button id="endPlay" hidden>▶ 듣기</button><div id="endMic" hidden><span class="dot"></span><span class="lab"></span></div></div>
   </div>
   <div id="pile2" class="pileEnd"></div></div>
 
@@ -431,7 +433,8 @@ let AC=null;
 function audioCtx(){ return AC=AC||new (window.AudioContext||window.webkitAudioContext)(); }
 // 첫 터치마다 오디오를 깨워 둔다(iOS 자동재생 제한 풀기). 무음 한 번 + 말하기 엔진도 한 번 깨움.
 let audioUnlocked=false;
-document.addEventListener("pointerdown",()=>{ try{ const ac=audioCtx(); if(ac.state!=="running") ac.resume(); if(!audioUnlocked){ audioUnlocked=true; const b=ac.createBuffer(1,1,22050), s=ac.createBufferSource(); s.buffer=b; s.connect(ac.destination); s.start(0); try{ const u=new SpeechSynthesisUtterance(" "); u.volume=0; speechSynthesis.speak(u); }catch{} } }catch{} },{capture:true,passive:true});
+const unlockAudio=()=>{ try{ const ac=audioCtx(); if(ac.state!=="running") ac.resume(); if(!audioUnlocked){ audioUnlocked=true; const b=ac.createBuffer(1,1,22050), s=ac.createBufferSource(); s.buffer=b; s.connect(ac.destination); s.start(0); try{ const u=new SpeechSynthesisUtterance(" "); u.volume=0; speechSynthesis.speak(u); }catch{} } }catch{} };
+for(const ev of ["pointerdown","touchend","click"]) document.addEventListener(ev,unlockAudio,{capture:true,passive:true});   // iOS는 touchend·click만 '소리 허락'으로 치는 경우가 있다
 function tick(){ try{ const ac=AC=AC||new (window.AudioContext||window.webkitAudioContext)(); if(ac.state==="suspended") ac.resume(); const o=ac.createOscillator(), g=ac.createGain(); o.frequency.value=1200; g.gain.setValueAtTime(.15,ac.currentTime); g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.08); o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime+.09);}catch{} }
 
 // ---------- 종이 사진 ----------
@@ -651,23 +654,24 @@ let lastSession=null;
 async function endSession(){ clearTimers(); $("handoff").textContent="아이 차례"; if(current){ await DB.addSession(current); lastSession=current; sessions=await DB.allSessions(); current=null; await pruneOld(); } renderPile(); renderEnded(); show("ended"); }
 // 종료 화면: 방금 쓴 종이 + 도장 자리 + 이름 속 글자 찾기
 // 종료 화면 녹음 버튼: 방금 쓴 글자를 아이 목소리로 담는다
-// 종료 화면 목소리: 길게(1초) 누르면 3초 녹음(3·2·1 보임), 끝나면 "▶ 눌러서 듣기".
-// 듣기는 누르는 그 순간 <audio>로 바로 재생한다 — 아이패드는 마이크를 쓴 직후 '누르지 않은' 재생을 막는 경우가 있다.
+// 종료 화면 목소리: [▶ 듣기] 버튼 + [길게 눌러 담기] 버튼(3·2·1)
 let micAudio=null, micAudioSyl="";
 async function loadMicAudio(syl){ const b=await DB.getVoice(Voice.key(syl,"child")); if(micAudio){ URL.revokeObjectURL(micAudio.src); micAudio=null; } if(!b) return null; micAudio=new Audio(URL.createObjectURL(b)); micAudio.preload="auto"; micAudio.load(); micAudioSyl=syl; return b; }
-function renderEndMic(){ const m=$("endMic"); const syl=lastSession&&!lastSession.free?lastSession.syllable:""; m.hidden=!syl||!Voice.canRecord(); if(!syl) return; m.classList.remove("arming","rec");
-  loadMicAudio(syl).then(b=>{ m.dataset.has=b?"1":""; m.querySelector(".lab").textContent = b ? `▶ 눌러서 ${childName()} 목소리 듣기 · 길게 누르면 다시 담기` : `길게 눌러 ${childName()} 목소리로 '${syl}' 담기`; }); }
-(()=>{ const m=$("endMic"); let t=null, fired=false, tick3=null;
+function renderEndMic(){ const m=$("endMic"), pl=$("endPlay"); const syl=lastSession&&!lastSession.free?lastSession.syllable:""; m.hidden=!syl||!Voice.canRecord(); pl.hidden=true; if(!syl) return; m.classList.remove("arming","rec");
+  loadMicAudio(syl).then(b=>{ pl.hidden=!b; m.querySelector(".lab").textContent = b ? "길게 눌러 다시 담기" : `길게 눌러 ${childName()} 목소리로 '${syl}' 담기`; }); }
+// ▶ 듣기: 따로 있는 버튼, click에서 바로 재생(사파리가 확실히 허락하는 방식)
+(()=>{ const pl=$("endPlay"); ["pointerdown","pointerup"].forEach(ev=>pl.addEventListener(ev,e=>e.stopPropagation()));
+  pl.addEventListener("click",e=>{ e.stopPropagation(); unlockAudio(); if(!micAudio) return; try{ micAudio.currentTime=0; }catch{} const p=micAudio.play(); if(p) p.catch(()=>Voice.play(micAudioSyl,"child")); }); })();
+// 담기: 길게(1초) 눌러야 시작. 짧게 누르면 아무 일 없음.
+(()=>{ const m=$("endMic"); let t=null, tick3=null;
   const lab=x=>m.querySelector(".lab").textContent=x;
-  m.addEventListener("pointerdown",e=>{ e.stopPropagation(); if(m.classList.contains("rec")) return; fired=false; clearTimers(); m.classList.add("arming");
-    t=setTimeout(async()=>{ fired=true; m.classList.remove("arming"); m.classList.add("rec"); const syl=lastSession.syllable; let n=3; lab(`듣고 있어요… ${n}`); clearInterval(tick3); tick3=setInterval(()=>{ n--; if(n>0) lab(`듣고 있어요… ${n}`); },1000);
+  m.addEventListener("pointerdown",e=>{ e.stopPropagation(); if(m.classList.contains("rec")) return; clearTimers(); m.classList.add("arming");
+    t=setTimeout(async()=>{ m.classList.remove("arming"); m.classList.add("rec"); $("endPlay").hidden=true; const syl=lastSession.syllable; let n=3; lab(`듣고 있어요… ${n}`); clearInterval(tick3); tick3=setInterval(()=>{ n--; if(n>0) lab(`듣고 있어요… ${n}`); },1000);
       try{ const ok=await Voice.record(syl,"child"); clearInterval(tick3); m.classList.remove("rec"); if(!ok||stage!=="ended") return;
         const b=await loadMicAudio(syl); if(!b||b.size<800){ lab("소리가 안 담겼어요 · 마이크 허용을 확인하고 다시 길게"); return; }
-        m.dataset.has="1"; lab(`▶ 눌러서 ${childName()} 목소리 듣기 · 길게 누르면 다시 담기`); micAudio.play().catch(()=>{}); }
+        $("endPlay").hidden=false; lab("담았어요 · 길게 누르면 다시 담기"); micAudio.play().catch(()=>{}); }
       catch{ clearInterval(tick3); m.classList.remove("rec"); lab("마이크를 쓸 수 없어요 (어른 메뉴에서 파일로 올리기)"); } },1000); });
-  m.addEventListener("pointerup",e=>{ e.stopPropagation(); clearTimeout(t); m.classList.remove("arming"); if(fired||m.classList.contains("rec")) return;
-    if(m.dataset.has && micAudio){ try{ audioCtx().resume(); }catch{} micAudio.currentTime=0; micAudio.play().catch(()=>{ Voice.play(micAudioSyl,"child"); }); } });   // 짧게 누르면 듣기(누르는 순간 재생)
-  ["pointercancel","pointerleave"].forEach(ev=>m.addEventListener(ev,e=>{ e.stopPropagation(); clearTimeout(t); m.classList.remove("arming"); })); })();
+  ["pointerup","pointercancel","pointerleave"].forEach(ev=>m.addEventListener(ev,e=>{ e.stopPropagation(); clearTimeout(t); m.classList.remove("arming"); })); })();
 function renderEnded(){ renderEndMic(); const sh=$("endSheet"), hint=$("sealHint"); const ok=lastSession && lastSession.thumb && (lastSession.strokeCount||0)>0;
   sh.hidden=!ok; hint.hidden=!ok||!!lastSession.sealed; if(ok){ sh.querySelector("img").src=lastSession.thumb; sh.querySelectorAll(".sealAnim").forEach(e=>e.remove()); }
   const nm=$("names"); nm.innerHTML=""; const syl=lastSession&&!lastSession.free?lastSession.syllable:""; if(syl){ const set=new Set(syl);
