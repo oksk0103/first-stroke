@@ -56,6 +56,14 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);o
 /* 이름 속 글자 찾기: 가족 이름은 연하게, 오늘 글자만 먹색 */
 #names{display:flex;gap:28px;flex-wrap:wrap;justify-content:center;font-family:var(--serif);font-size:min(44px,6vh);color:var(--ink-faint);letter-spacing:.06em}
 #names b{font-weight:400;color:var(--ink)}
+/* 종료 화면 녹음: 길게(1초) 눌러야 시작 — 아이가 톡톡 눌러도 아무 일 없음 */
+#endMic{display:flex;align-items:center;gap:10px;padding:12px 20px;border-radius:999px;border:1px solid var(--ink-faint);color:var(--ink-soft);font-size:15px;touch-action:none;user-select:none;cursor:pointer;position:relative;overflow:hidden}
+#endMic .dot{width:12px;height:12px;border-radius:50%;background:var(--ink-soft)}
+#endMic::before{content:"";position:absolute;inset:0;background:var(--ink-faint);transform:scaleX(0);transform-origin:left}
+#endMic.arming::before{transform:scaleX(1);transition:transform 1s linear}
+#endMic.rec{color:#A8432E;border-color:#A8432E}
+#endMic.rec .dot{background:#A8432E;animation:pulse .8s ease-in-out infinite alternate}
+@keyframes pulse{to{opacity:.3}}
 /* 아이 차례 먹 색 고르기: 세 점. 오른쪽 아래 */
 #inks{position:absolute;right:max(24px,env(safe-area-inset-right,0px));bottom:max(24px,env(safe-area-inset-bottom,0px));display:flex;gap:14px}
 #inks span{width:44px;height:44px;border-radius:50%;box-shadow:0 0 0 3px var(--paper),0 1px 4px rgba(27,42,74,.25);cursor:pointer;touch-action:manipulation;transition:transform .15s}
@@ -166,6 +174,7 @@ textarea{width:100%;min-height:120px;font:12px ui-monospace,monospace;border:1px
     <div id="endSheet" hidden><img alt=""></div>
     <div id="sealHint" hidden>종이를 꾹 누르면 도장이 찍혀요</div>
     <div id="names"></div>
+    <div id="endMic" hidden><span class="dot"></span><span class="lab"></span></div>
     <div class="paper-photo" id="endPhoto" hidden><div class="empty">오늘 종이</div></div>
     <div class="quiet">오늘은 여기까지</div>
   </div>
@@ -625,7 +634,15 @@ function foldThenEnd(){ const st=$("canvasStage"); CV.freeze(); if(matchMedia("(
 let lastSession=null;
 async function endSession(){ clearTimers(); $("handoff").textContent="아이 차례"; if(current){ await DB.addSession(current); lastSession=current; sessions=await DB.allSessions(); current=null; await pruneOld(); } renderPile(); renderEnded(); show("ended"); }
 // 종료 화면: 방금 쓴 종이 + 도장 자리 + 이름 속 글자 찾기
-function renderEnded(){ const sh=$("endSheet"), hint=$("sealHint"); const ok=lastSession && lastSession.thumb && (lastSession.strokeCount||0)>0;
+// 종료 화면 녹음 버튼: 방금 쓴 글자를 아이 목소리로 담는다
+function renderEndMic(){ const m=$("endMic"); const syl=lastSession&&!lastSession.free?lastSession.syllable:""; m.hidden=!syl||!Voice.canRecord(); if(!syl) return; m.classList.remove("arming","rec");
+  Voice.has(syl,"child").then(has=>{ m.querySelector(".lab").textContent=`길게 눌러 ${childName()} 목소리로 '${syl}' ${has?"다시 ":""}담기`; }); }
+(()=>{ const m=$("endMic"); let t=null;
+  m.addEventListener("pointerdown",e=>{ e.stopPropagation(); if(m.classList.contains("rec")) return; clearTimers(); m.classList.add("arming"); t=setTimeout(async()=>{ m.classList.remove("arming"); m.classList.add("rec"); const syl=lastSession.syllable; m.querySelector(".lab").textContent="듣고 있어요… 말해 주세요";
+    try{ await Voice.record(syl,"child"); m.classList.remove("rec"); m.querySelector(".lab").textContent="담았어요 · 들어 보세요"; await Voice.play(syl,"child"); setTimeout(renderEndMic,2500); }
+    catch{ m.classList.remove("rec"); m.querySelector(".lab").textContent="마이크를 쓸 수 없어요 (어른 메뉴에서 파일로 올리기)"; } },1000); });
+  ["pointerup","pointercancel","pointerleave"].forEach(ev=>m.addEventListener(ev,e=>{ e.stopPropagation(); clearTimeout(t); m.classList.remove("arming"); })); })();
+function renderEnded(){ renderEndMic(); const sh=$("endSheet"), hint=$("sealHint"); const ok=lastSession && lastSession.thumb && (lastSession.strokeCount||0)>0;
   sh.hidden=!ok; hint.hidden=!ok||!!lastSession.sealed; if(ok){ sh.querySelector("img").src=lastSession.thumb; sh.querySelectorAll(".sealAnim").forEach(e=>e.remove()); }
   const nm=$("names"); nm.innerHTML=""; const syl=lastSession&&!lastSession.free?lastSession.syllable:""; if(syl && [...syl].length===1){
     const names=settings.names.split(",").map(x=>x.trim()).filter(Boolean).filter(n=>n.includes(syl));
