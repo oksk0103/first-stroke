@@ -326,9 +326,9 @@ const CV = (()=>{
 // 글꼴(리디바탕)에서 꺼낸 실제 윤곽. 연한 글자 = 전체, 조각 = 모음(ㅏㅗㅜㅣ) 획. 제자리에 놓으면 '딱' 한 번.
 // 실루엣·점선 없음(연한 글자는 목표가 아니라 맥락: 글자는 음절 안에서만 보인다). 10초면 넘어간다.
 function runBars(syl, done){
-  const st=$("bars"); st.innerHTML='<div class="barHint">조각을 연한 글자 위에 끌어다 놓아요 · 안 놓아도 10초 뒤 넘어가요</div>'; show("bars");
+  const st=$("bars"); st.innerHTML='<div class="barHint">조각을 연한 글자 위에 끌어다 놓아요</div>'; show("bars");
   const G=GLYPHS[syl]; const [x0,y0,x1,y1]=G.bbox; const gw=x1-x0, gh=y1-y0;
-  const W=st.clientWidth, H=st.clientHeight; const size=Math.min(W*0.7,H*0.7); const k=size/Math.max(gw,gh);   // 글꼴단위→px
+  const W=st.clientWidth, H=st.clientHeight; const portrait=H>W; const size=Math.min(W,H)*(portrait?0.6:0.7); const k=size/Math.max(gw,gh);   // 글꼴단위→px
   const ns="http://www.w3.org/2000/svg";
   const svg=document.createElementNS(ns,"svg"); svg.setAttribute("class","gl");
   // 화면 전체를 글꼴 단위로: 글자 중심이 화면 중심에, 조각이 어디로 가도 터치를 받는다
@@ -341,7 +341,7 @@ function runBars(syl, done){
   let snapped=0; const pieces=G.pieces.map((pc,i)=>{
     const el=document.createElementNS(ns,"path"); el.setAttribute("class","piece"); el.setAttribute("d",pc.d); g.appendChild(el);
     // 시작 위치: 제자리에서 글자 폭의 0.6~0.8 만큼 떨어진 곳 (화면 안)
-    const dist=gw*0.5; const starts=[{x:-dist,y:-dist*0.45},{x:dist,y:dist*0.45},{x:dist*0.95,y:-dist*0.35}]; const off={...starts[i%3]};   // 초성 왼쪽 아래, 모음 오른쪽 위, 받침 오른쪽 아래
+    const dist=gw*0.5; const starts= portrait ? [{x:-dist*0.3,y:gh*0.85},{x:dist*0.6,y:-gh*0.85},{x:-dist*0.6,y:-gh*0.85}] : [{x:-dist,y:-dist*0.45},{x:dist,y:dist*0.45},{x:dist*0.95,y:-dist*0.35}]; const off={...starts[i%3]};   // 가로: 초성 왼쪽 아래·모음 오른쪽 위·받침 오른쪽 아래 / 세로: 위·아래
     const setOff=()=>el.setAttribute("transform",`translate(${off.x} ${off.y})`); setOff();
     let drag=null;
     el.addEventListener("pointerdown",e=>{ if(el.dataset.done) return; el.setPointerCapture(e.pointerId); drag={x:e.clientX,y:e.clientY,ox:off.x,oy:off.y}; });
