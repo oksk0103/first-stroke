@@ -279,7 +279,7 @@ const CV = (()=>{
   let mode="adult", strokes=[], cur=null, adultStrokes=[], penLifts=0, turns=0, decided=false, lastPenTime=0, sharedWriting=false;
   let onPenUp=null, onIdle=null, onHandoff=null;
   function layout(){ dpr=Math.min(2,devicePixelRatio||1); W=wrap.clientWidth; H=wrap.clientHeight;
-    const w=W*CFG.canvasFraction; rect={x:leftHanded?0:W-w, y:0, w, h:H}; sibRect={x:leftHanded?w:0,y:0,w:W-w,h:H};
+    const w=settings.sibling ? W*CFG.canvasFraction : W; rect={x:leftHanded?0:W-w, y:0, w, h:H};  /* 언니 자리를 켰을 때만 화면을 나눈다 */ sibRect={x:leftHanded?w:0,y:0,w:W-w,h:H};
     for(const c of [adult,pool,child,sib]){ c.width=W*dpr; c.height=H*dpr; c.style.width=W+"px"; c.style.height=H+"px"; }
     div.style.left=(leftHanded?w-1:W-w-1)+"px"; div.style.display=settings.sibling?"block":"none"; redrawAll(); }
   addEventListener("resize",layout);
@@ -289,7 +289,7 @@ const CV = (()=>{
   function inRect(r,x,y){ return x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h; }
   function pos(e){ const b=wrap.getBoundingClientRect(); return {x:e.clientX-b.left,y:e.clientY-b.top,t:performance.now()}; }
   // 입력: 펜 우선, 손가락 허용. 펜을 쓴 직후 2초 안의 넓은 터치(손바닥)는 무시.
-  function accept(e){ if(e.pointerType==="pen"){ lastPenTime=performance.now(); return true; } if(e.pointerType==="touch"){ if(performance.now()-lastPenTime<2000) return false; if((e.width||0)>40) return false; return true; } return e.pointerType==="mouse"; }
+  function accept(e){ if(e.pointerType==="pen"){ lastPenTime=performance.now(); return true; } if(e.pointerType==="touch"){ if(lastPenTime && performance.now()-lastPenTime<2000 && (e.width||0)>40) return false; return true; } return e.pointerType==="mouse"; }   // 손바닥 무시는 펜을 막 쓴 직후에만. 펜 없이 손가락만 쓰면 전부 받는다.
   const active={};
   wrap.addEventListener("pointerdown",e=>{ if(!accept(e)) return; const p=pos(e);
     const target = settings.sibling && inRect(sibRect,p.x,p.y) ? "sib" : inRect(rect,p.x,p.y) ? "main" : null; if(!target) return;
