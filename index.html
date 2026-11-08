@@ -10,14 +10,14 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon.png">
 <title>첫 획</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600&family=Noto+Sans+KR:wght@400;500&display=swap">
 <style>
+@font-face{font-family:'RIDIBatang';src:url(fonts/RIDIBatang.woff2) format('woff2'), url(fonts/RIDIBatang.otf) format('opentype');font-weight:400;font-style:normal;font-display:block}
 /* 한 장의 종이. 미색 지면 + 남색 잉크, 단일 테마(종이는 다크모드가 없다). 화면 전체가 캔버스, 어른 UI는 숨김. */
 :root{
   --paper:#F4EFE4; --ink:#1B2A4A; --ink-soft:rgba(27,42,74,.55); --ink-faint:rgba(27,42,74,.12);
   --well:rgba(255,255,255,.35);
-  --serif:"Noto Serif KR",Georgia,"Apple SD Gothic Neo",serif;
-  --sans:"Noto Sans KR",-apple-system,"Apple SD Gothic Neo",sans-serif;
+  --serif:"RIDIBatang","Apple SD Gothic Neo",serif;
+  --sans:"RIDIBatang",-apple-system,"Apple SD Gothic Neo",sans-serif;
   color-scheme:light;
 }
 html,body{height:100%}
@@ -32,7 +32,7 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);o
 .paper-photo{max-width:min(520px,80vw);max-height:40vh;border-radius:12px;background:var(--well);display:flex;align-items:center;justify-content:center;overflow:hidden}
 .paper-photo img{max-width:100%;max-height:40vh;display:block}
 .paper-photo .empty{padding:40px 60px;color:var(--ink-soft);font-size:18px}
-.big{font-family:var(--sans);font-size:min(160px,28vh);line-height:1;font-weight:500}
+.big{font-family:var(--serif);font-size:min(160px,28vh);line-height:1;font-weight:400}
 .quiet{color:var(--ink-soft);font-size:20px}
 /* 캔버스 */
 #canvasWrap{position:absolute;inset:0}
@@ -43,8 +43,9 @@ canvas{position:absolute;top:0;left:0;touch-action:none}
   background:var(--ink);color:var(--paper);border:0;border-radius:999px;padding:14px 26px;font:500 20px var(--sans);opacity:.85}
 .btn:focus-visible{outline:3px solid var(--ink-soft);outline-offset:3px}
 /* 막대 */
-.bar{position:absolute;background:var(--ink);border-radius:13px;touch-action:none}
-.barGhost{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-family:var(--sans);font-weight:500;font-size:min(420px,70vh,70vw);line-height:1;color:var(--ink);opacity:.10;pointer-events:none}
+.bar{position:absolute;touch-action:none;display:flex;align-items:center;justify-content:center;font-family:var(--serif);color:var(--ink);line-height:1;pointer-events:auto}
+.bar span{display:block;pointer-events:none}
+.barGhost{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-family:var(--serif);font-weight:400;font-size:min(420px,70vh,70vw);line-height:1;color:var(--ink);opacity:.10;pointer-events:none}
 .barHint{position:absolute;left:0;right:0;bottom:max(20px,env(safe-area-inset-bottom,0px));text-align:center;color:var(--ink-soft);font-size:15px;pointer-events:none}
 /* 어른 메뉴 */
 #menu{position:absolute;inset:0;background:var(--paper);overflow:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;
@@ -59,7 +60,7 @@ canvas{position:absolute;top:0;left:0;touch-action:none}
 #menu button{font:15px var(--sans);padding:8px 14px;border:1px solid var(--ink-soft);border-radius:8px;background:transparent;color:var(--ink)}
 #menu button.primary{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 #menu label.tog{display:flex;gap:10px;align-items:center;font-size:16px}
-#menu .today{font:500 56px var(--sans);line-height:1}
+#menu .today{font:400 56px var(--serif);line-height:1}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
 .grid figure{margin:0;background:var(--well);border-radius:10px;overflow:hidden}
 .grid img{width:100%;display:block;aspect-ratio:1}
@@ -326,7 +327,9 @@ function runBars(target, done, syllable){
   const L=220, Sh=110, T=26, W=st.clientWidth, H=st.clientHeight;
   const spec={ giyeok:[[1,L],[0,L]], nieun:[[0,L],[1,L]], a:[[0,L],[1,Sh]], o:[[0,Sh],[1,L]], u:[[1,L],[0,Sh]] }[target];
   const p=[{x:W*.3,y:H*.45},{x:W*.65,y:H*.6}]; let snapped=false;
-  const bars=spec.map((s,i)=>{ const b=document.createElement("div"); b.className="bar"; b.style.width=(s[0]?s[1]:T)+"px"; b.style.height=(s[0]?T:s[1])+"px"; st.appendChild(b); return b; });
+  const bars=spec.map((s,i)=>{ const b=document.createElement("div"); b.className="bar"; b.style.width=(s[0]?s[1]:T*2.2)+"px"; b.style.height=(s[0]?T*2.2:s[1])+"px";
+    // 글꼴의 실제 획: 가로 = 'ㅡ', 세로 = 'ㅣ'. 길이에 맞춰 늘림.
+    const g=document.createElement("span"); g.textContent=s[0]?"ㅡ":"ㅣ"; g.style.fontSize=L+"px"; g.style.transform= s[0]? `scaleX(${(s[1]/L)*1.08})` : `scaleY(${(s[1]/L)*1.1})`; b.appendChild(g); st.appendChild(b); return b; });
   const place=()=>bars.forEach((b,i)=>{ const s=spec[i]; b.style.left=(p[i].x-(s[0]?s[1]:T)/2)+"px"; b.style.top=(p[i].y-(s[0]?T:s[1])/2)+"px"; });
   const end=(c,s,side)=> s[0]?{x:c.x+side*s[1]/2,y:c.y}:{x:c.x,y:c.y+side*s[1]/2};
   const join=()=>{ switch(target){ case "giyeok": return [end(p[0],spec[0],1),end(p[1],spec[1],-1)]; case "nieun": return [end(p[0],spec[0],1),end(p[1],spec[1],-1)]; case "a": return [p[0],end(p[1],spec[1],-1)]; case "o": return [end(p[0],spec[0],1),p[1]]; case "u": return [p[0],end(p[1],spec[1],-1)]; } };
