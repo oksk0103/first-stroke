@@ -163,6 +163,12 @@ textarea{width:100%;min-height:120px;font:12px ui-monospace,monospace;border:1px
     </section>
 
     <section>
+      <h2>하루 글자 수</h2>
+      <div class="row"><select id="mPerDay"><option value="1">하루 한 글자</option><option value="2">두 글자까지</option><option value="0">아이가 원하는 만큼</option></select></div>
+      <p class="hint">아이가 끝낸 뒤 스스로 다시 눌렀을 때만 다음 글자가 나와요. 어른이 권하지는 않기.</p>
+    </section>
+
+    <section>
       <h2>다음 묶음</h2>
       <div class="row"><select id="mLevel"><option value="0">12글자만</option><option value="1">+ ㅁ (마모무미)</option><option value="2">+ ㅁ·ㅅ (사소수시까지)</option></select></div>
       <p class="hint" id="levelHint">12글자를 한 바퀴 돈 뒤에 ㅁ을, 그 다음 바퀴 뒤에 ㅅ을 켜 주세요. 한 번에 한 요소만. 아이에게 고르기 화면은 없고, 오늘 글자는 그대로 하나입니다.</p>
@@ -231,7 +237,7 @@ if (PHILOSOPHY.tracing || PHILOSOPHY.rewards.length || PHILOSOPHY.correctness ||
 const CFG = {
   ink:"#1B2A4A", adultInk:"#A8432E", paper:"#F4EFE4", /* 아이 = 먹, 어른 = 주묵(체본 전통) */ inkWidth:22, canvasFraction:2/3,
   soundDelay:2000, adultLifetime(n){ return n<4?null : n<=6?8000 : 5000; },   // n = 쓴 날 수. 1~3일 안 사라짐 / 4~6일 8초 / 그 뒤 5초(3초는 아이가 펜 잡기 전 사라져 폐기)
-  idleEnd:10000, warnBefore:3000, homeWait:30000, bookIdle:30000, dormantDays:14, barsTimeout:10000, foldMs:1100, snapHold:2000, menuHold:3000, mirrorDays:2, nameMaxPerWeek:2,
+  idleEnd:15000, warnBefore:4000,   // 태이 관찰: 생각보다 오래 집중함 → 10초에서 15초로 homeWait:30000, bookIdle:30000, dormantDays:14, barsTimeout:10000, foldMs:1100, snapHold:2000, menuHold:3000, mirrorDays:2, nameMaxPerWeek:2,
   writeList:["가","고","구","기","나","노","누","니","아","오","우","이"],
   // 확장 묶음: 한 번에 한 요소씩. 어른 메뉴에서 한 바퀴 돈 뒤 켠다. 받침은 없음.
   levels:[ {name:"ㅁ", syls:["마","모","무","미"]}, {name:"ㅅ", syls:["사","소","수","시"]} ],   // ㅅ은 늦은 음소라 ㅁ 뒤에
@@ -249,6 +255,7 @@ const settings = {
   get openedBy(){ return S.get("openedBy","아빠"); }, set openedBy(v){ S.set("openedBy",v); },
   get excluded(){ return S.get("excluded",[]); }, set excluded(v){ S.set("excluded",v); },
   get level(){ return S.get("level",0); }, set level(v){ S.set("level",v); },
+  get perDay(){ return S.get("perDay",1); }, set perDay(v){ S.set("perDay",v); },   // 하루 글자 수: 1 / 2 / 0 = 아이가 원하는 만큼
   get manual(){ return S.get("manual",""); }, set manual(v){ S.set("manual",v); },
   get swap(){ return S.get("swap",false); }, set swap(v){ S.set("swap",v); },
   get sibling(){ return S.get("sibling",false); }, set sibling(v){ S.set("sibling",v); },
@@ -289,8 +296,10 @@ function shareReason(s){ const d=decompose(s); const h=hardParts(d); return h.le
 function planToday(sessions){
   if (settings.manual) return {syllable:settings.manual, shared:false, reason:"어른이 직접 고름"};
   // 하루 한 글자: 오늘 이미 쓴 글자가 있으면 그 글자. 아이가 더 하면 같은 글자를 더 쓴다.
-  const today=sessions.find(s=>sameDay(s.date,Date.now()));
-  if(today){ const d=decompose(today.syllable); const can=d?childCanWrite(d):true; return {syllable:today.syllable, shared:!can, reason:"오늘 글자"}; }
+  // 하루 글자 수(어른 메뉴): 기본 1. 오늘 쓴 서로 다른 글자가 그 수에 닿았으면 마지막 글자를 더 쓴다. 아이가 스스로 다시 눌렀을 때만 다음 글자.
+  const todays=sessions.filter(s=>sameDay(s.date,Date.now())); const distinct=[...new Set(todays.map(s=>s.syllable))];
+  if(todays.length && (settings.perDay>0 && distinct.length>=settings.perDay)){ const syl=todays[0].syllable; const d=decompose(syl); const can=d?childCanWrite(d):true; return {syllable:syl, shared:!can, reason:"오늘 글자"}; }
+  const todaySyls=new Set(distinct);
   const now=Date.now(), weekAgo=now-7*86400000, mirrorAgo=now-CFG.mirrorDays*86400000;
   const recent=sessions.filter(s=>s.date>weekAgo).map(s=>s.syllable);
   const recentV=new Set(sessions.filter(s=>s.date>mirrorAgo).map(s=>decompose(s.syllable)?.vowel).filter(Boolean));   // 짝 회피는 이틀만(7일이면 ㅜ가 영영 안 나옴)
@@ -301,10 +310,10 @@ function planToday(sessions){
   // 이름 음절은 양념: 7일에 nameMaxPerWeek 번까지만. 받침·어려운 이름 음절은 12글자 한 바퀴 뒤에.
   const nameSyls=nameSyllables(); const nameCount=sessions.filter(s=>s.date>weekAgo&&nameSyls.includes(s.syllable)).length;
   if(nameCount<CFG.nameMaxPerWeek){
-    const cand=nameSyls.filter(s=>!excluded.has(s)&&!recent.includes(s)&&!blocked(s)&&(rank(s)===0||roundDone(sessions))).sort((a,b)=> roundDone(sessions) ? lastWritten(a)-lastWritten(b) : (rank(a)-rank(b)||lastWritten(a)-lastWritten(b)));   // 한 바퀴 뒤엔 이름 글자도 골고루
+    const cand=nameSyls.filter(s=>!excluded.has(s)&&!todaySyls.has(s)&&!recent.includes(s)&&!blocked(s)&&(rank(s)===0||roundDone(sessions))).sort((a,b)=> roundDone(sessions) ? lastWritten(a)-lastWritten(b) : (rank(a)-rank(b)||lastWritten(a)-lastWritten(b)));   // 한 바퀴 뒤엔 이름 글자도 골고루
     if(cand.length){ const s=cand[0], can=childCanWrite(decompose(s)); return {syllable:s, shared:!can, reason:"이름 글자, "+shareReason(s)}; }
   }
-  const pool=writeListNow().filter(s=>!excluded.has(s)&&!blocked(s)).sort((a,b)=>lastWritten(a)-lastWritten(b));   // 가장 오래전에 쓴 것부터
+  const pool=writeListNow().filter(s=>!excluded.has(s)&&!todaySyls.has(s)&&!blocked(s)).sort((a,b)=>lastWritten(a)-lastWritten(b));   // 가장 오래전에 쓴 것부터
   const s=pool[0]||"가";
   const can=childCanWrite(decompose(s));
   return {syllable:s, shared:!can, reason: CFG.writeList.includes(s)?"쓰기 글자, 차례대로":"새 글자, "+shareReason(s)};
@@ -532,7 +541,7 @@ async function openMenu(){ clearTimers(); show("menu"); const p=planToday(sessio
   $("mToday").textContent=settings.manual||p.syllable; $("mReason").textContent=settings.manual?"어른이 직접 고름":p.reason+(p.shared?" (분담)":"");
   const sel=$("mManual"); sel.innerHTML='<option value="">자동</option>'+writeListNow().map(s=>`<option value="${s}">${s}</option>`).join(""); sel.value=settings.manual;
   $("mExclude").checked=settings.excluded.includes(settings.manual||p.syllable);
-  $("mLevel").value=String(settings.level); $("levelHint").textContent=(roundDone(sessions)?"12글자를 한 바퀴 돌았어요. 다음 묶음을 켤 수 있어요. ":"아직 한 바퀴 전이에요. ")+"한 번에 한 요소만. 아이에게 고르기 화면은 없고, 오늘 글자는 그대로 하나입니다.";
+  $("mPerDay").value=String(settings.perDay); $("mLevel").value=String(settings.level); $("levelHint").textContent=(roundDone(sessions)?"12글자를 한 바퀴 돌았어요. 다음 묶음을 켤 수 있어요. ":"아직 한 바퀴 전이에요. ")+"한 번에 한 요소만. 아이에게 고르기 화면은 없고, 오늘 글자는 그대로 하나입니다.";
   $("mNames").value=settings.names; const ob=$("mOpenedBy"); ob.innerHTML=""; for(const h of helpers()){ const o=document.createElement("option"); o.value=h; o.textContent=h; ob.appendChild(o); } ob.value=settings.openedBy; $("mPreferChild").checked=settings.preferChild;
   $("mSibling").checked=settings.sibling; $("mSwap").checked=settings.swap; $("mLifeStep").textContent=settings.lifeStep;
   const n=sessions.length+1+settings.lifeStep, life=CFG.adultLifetime(n); $("mLife").textContent= life==null?"지금: 안 사라짐 (덮어 써도 됨)":`지금: ${life/1000}초 뒤 사라짐`;
@@ -541,6 +550,7 @@ async function openMenu(){ clearTimers(); show("menu"); const p=planToday(sessio
   await renderVoiceRows(settings.manual||p.syllable); }
 $("menuClose").addEventListener("click",()=>{ settings.names=$("mNames").value.split(",").map(x=>x.trim()).filter(Boolean).join(","); settings.openedBy=$("mOpenedBy").value||helpers()[0]; goHome(); });
 $("mManual").addEventListener("change",e=>{ settings.manual=e.target.value; openMenu(); });
+$("mPerDay").addEventListener("change",e=>{ settings.perDay=+e.target.value; });
 $("mLevel").addEventListener("change",e=>{ settings.level=+e.target.value; if(settings.manual && !writeListNow().includes(settings.manual)) settings.manual=""; openMenu(); });
 $("mExclude").addEventListener("change",e=>{ const s=$("mToday").textContent; const ex=new Set(settings.excluded); e.target.checked?ex.add(s):ex.delete(s); settings.excluded=[...ex]; });
 $("mPreferChild").addEventListener("change",e=>settings.preferChild=e.target.checked);
