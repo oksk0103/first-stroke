@@ -34,6 +34,21 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);o
 .paper-photo .empty{padding:40px 60px;color:var(--ink-soft);font-size:18px}
 .big{font-family:var(--serif);font-size:min(160px,28vh);line-height:1;font-weight:400}
 .quiet{color:var(--ink-soft);font-size:20px}
+/* 종이 더미 = 내 글씨 책 입구 (숫자·날짜 없음). 홈 왼쪽 아래 */
+#pile{position:absolute;left:max(28px,env(safe-area-inset-left,0px));bottom:max(28px,env(safe-area-inset-bottom,0px));width:min(140px,22vw);aspect-ratio:1;touch-action:none;cursor:pointer}
+#pile .sheet{position:absolute;inset:0;border-radius:6px;background:var(--paper);box-shadow:0 1px 2px rgba(27,42,74,.18),0 0 0 1px rgba(27,42,74,.08);overflow:hidden}
+#pile .sheet img{width:100%;height:100%;object-fit:contain;display:block}
+#pile .sheet:nth-child(1){transform:rotate(-6deg) translate(-6px,4px)} #pile .sheet:nth-child(2){transform:rotate(3deg) translate(5px,-2px)} #pile .sheet:nth-child(3){transform:rotate(-1deg)}
+/* 내 글씨 책: 한 장에 종이 한 장. 좌우 넘김만. 마지막은 빈 종이 → 홈 */
+#book{background:var(--paper);touch-action:none}
+#book .page{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+#book .page img{width:min(78vw,78vh);height:min(78vw,78vh);object-fit:contain;image-rendering:auto;border-radius:10px;box-shadow:0 2px 12px rgba(27,42,74,.10)}
+#book .page.blank .sheet{width:min(78vw,78vh);height:min(78vw,78vh);border-radius:10px;background:var(--well)}
+/* 종료 예고: 9초째부터 종이가 천천히 어두워지고, 접혀서 더미로 */
+#canvasStage{transition:filter 2.5s ease,transform .7s cubic-bezier(.4,0,.6,1),opacity .7s ease;transform-origin:8% 96%}
+#canvasStage.dimming{filter:brightness(.86)}
+#canvasStage.fold{transform:scale(.12) rotate(-6deg);opacity:0}
+@media (prefers-reduced-motion:reduce){#canvasStage{transition:none}}
 /* 캔버스 */
 #canvasWrap{position:absolute;inset:0}
 canvas{position:absolute;top:0;left:0;touch-action:none}
@@ -77,7 +92,11 @@ textarea{width:100%;min-height:120px;font:12px ui-monospace,monospace;border:1px
   <div class="stage on" id="home"><div class="center" id="homeCenter">
     <div class="paper-photo" id="homePhoto"><div class="empty">오늘 종이</div></div>
     <div class="big" id="homeSyl">이</div>
-  </div></div>
+  </div>
+  <div id="pile" hidden></div></div>
+
+  <!-- 내 글씨 책: 아이가 넘겨보는 지난 14일 종이. 숫자·날짜·편집 없음. -->
+  <div class="stage" id="book"></div>
 
   <!-- 막대 조립: 실루엣 없음. 끝이 닿으면 '딱' 한 번. 10초면 넘어감. -->
   <div class="stage" id="bars"></div>
@@ -277,7 +296,7 @@ const CV = (()=>{
   const wrap=$("canvasWrap"), adult=$("adultLayer"), pool=$("poolLayer"), child=$("childLayer"), sib=$("siblingLayer"), div=$("siblingDivider");
   let dpr=1, W=0, H=0, rect={x:0,y:0,w:0,h:0}, sibRect={x:0,y:0,w:0,h:0};
   let mode="adult", strokes=[], cur=null, adultStrokes=[], penLifts=0, turns=0, decided=false, lastPenTime=0, sharedWriting=false;
-  let onPenUp=null, onIdle=null, onHandoff=null;
+  let onPenUp=null, onIdle=null, onHandoff=null, onWarn=null;
   function layout(){ dpr=Math.min(2,devicePixelRatio||1); W=wrap.clientWidth; H=wrap.clientHeight;
     const w=settings.sibling ? W*CFG.canvasFraction : W; rect={x:leftHanded?0:W-w, y:0, w, h:H};  /* 언니 자리를 켰을 때만 화면을 나눈다 */ sibRect={x:leftHanded?w:0,y:0,w:W-w,h:H};
     for(const c of [adult,pool,child,sib]){ c.width=W*dpr; c.height=H*dpr; c.style.width=W+"px"; c.style.height=H+"px"; }
@@ -294,7 +313,7 @@ const CV = (()=>{
   wrap.addEventListener("pointerdown",e=>{ if(!accept(e)) return; const p=pos(e);
     const target = settings.sibling && inRect(sibRect,p.x,p.y) ? "sib" : inRect(rect,p.x,p.y) ? "main" : null; if(!target) return;
     e.preventDefault(); wrap.setPointerCapture?.(e.pointerId);
-    active[e.pointerId]={target,pts:[p]}; clearTimeout(timers.idle); clearTimeout(timers.sound);
+    active[e.pointerId]={target,pts:[p]}; clearTimeout(timers.idle); clearTimeout(timers.sound); clearTimeout(timers.warn); onWarn&&onWarn(false);
     if(target==="main" && mode==="child" && !decided) decided=false;
   });
   wrap.addEventListener("pointermove",e=>{ const a=active[e.pointerId]; if(!a) return; const p=pos(e); a.pts.push(p);
@@ -304,7 +323,7 @@ const CV = (()=>{
     const pts=a.pts; if(mode==="adult"){ adultStrokes.push(pts); } else { strokes.push(pts); penLifts++; turns+=countTurns(pts); decideHand(pts); inkPool(pts); }
     redrawAll();
     if(mode==="child") timers.sound=setTimeout(()=>onPenUp&&onPenUp(), CFG.soundDelay);
-    timers.idle=setTimeout(()=>onIdle&&onIdle(), CFG.idleEnd);
+    timers.idle=setTimeout(()=>onIdle&&onIdle(), CFG.idleEnd); if(mode==="child") timers.warn=setTimeout(()=>onWarn&&onWarn(true), CFG.idleEnd-3000);
   }
   wrap.addEventListener("pointerup",endStroke); wrap.addEventListener("pointercancel",endStroke);
   // 꺾임 = 속도 최소점 + 방향 전환 (각도 60° 초과). 획이 끝난 뒤에만. 즉시 반응 없음.
@@ -314,12 +333,16 @@ const CV = (()=>{
   function inkPool(pts){ const end=pts.at(-1); let dwell=0; for(let i=pts.length-1;i>=0;i--){ if(Math.hypot(pts[i].x-end.x,pts[i].y-end.y)>6) break; dwell=end.t-pts[i].t; } if(dwell<300) return; const x=ctx(pool); x.fillStyle=CFG.ink; x.globalAlpha=0; x.beginPath(); x.arc(end.x,end.y,CFG.inkWidth/2+4,0,7); x.globalAlpha=1; x.fill(); }
   function overlap(){ const A=adultStrokes.flat(), C=strokes.flat(); if(!A.length||!C.length) return 0; const r=CFG.inkWidth; let near=0; for(let i=0;i<C.length;i+=2){ if(A.some(a=>Math.hypot(a.x-C[i].x,a.y-C[i].y)<r)) near++; } return near/Math.ceil(C.length/2); }
   function reset(){ strokes=[]; adultStrokes=[]; penLifts=0; turns=0; decided=false; clearTimeout(timers.idle); clearTimeout(timers.sound); clearTimeout(timers.fade); adult.style.opacity=1; for(const c of [adult,pool,child,sib]) ctx(c).clearRect(0,0,W,H); }
-  function setMode(m){ mode=m; clearTimeout(timers.idle); clearTimeout(timers.sound); $("handoff").hidden = m!=="adult"; }
+  function setMode(m){ mode=m; clearTimeout(timers.idle); clearTimeout(timers.sound); clearTimeout(timers.warn); onWarn&&onWarn(false); $("handoff").hidden = m!=="adult"; }
   function showAdult(strokesIn, lifetime){ adultStrokes=strokesIn; adult.style.opacity=1; redrawAll(); clearTimeout(timers.fade); if(lifetime!=null && !sharedWriting) timers.fade=setTimeout(()=>{ adult.style.opacity=0; }, lifetime); }
   // 두 손가락 더블탭 = 어른 획 다시 보기 (재요청 횟수 기록)
   let tapTimes=[]; wrap.addEventListener("touchstart",e=>{ if(e.touches.length===2){ const now=performance.now(); tapTimes=tapTimes.filter(t=>now-t<400); tapTimes.push(now); if(tapTimes.length>=2){ tapTimes=[]; if(mode==="child"&&adultStrokes.length){ if(current) current.adultReplays++; showAdult(adultStrokes, adultLifetime); } } } },{passive:true});
   return { layout, reset, setMode, showAdult, overlap, get strokes(){return strokes;}, get adultStrokes(){return adultStrokes;}, get penLifts(){return penLifts;}, get turns(){return turns;},
-    set sharedWriting(v){ sharedWriting=v; }, set onPenUp(f){onPenUp=f;}, set onIdle(f){onIdle=f;}, thumbnail(){ const c=document.createElement("canvas"); c.width=300; c.height=300; const x=c.getContext("2d"); x.fillStyle=CFG.paper; x.fillRect(0,0,300,300); x.strokeStyle=CFG.ink; x.lineCap="round"; x.lineJoin="round"; const k=300/Math.max(rect.w,rect.h); x.lineWidth=CFG.inkWidth*k; for(const s of strokes){ x.beginPath(); s.forEach((p,i)=>{ const px=(p.x-rect.x)*k, py=(p.y-rect.y)*k; i?x.lineTo(px,py):x.moveTo(px,py); }); x.stroke(); } return c.toDataURL("image/png"); } };
+    set sharedWriting(v){ sharedWriting=v; }, set onPenUp(f){onPenUp=f;}, set onIdle(f){onIdle=f;}, set onWarn(f){onWarn=f;}, thumbnail(){ const c=document.createElement("canvas"); c.width=600; c.height=600; const x=c.getContext("2d"); x.fillStyle=CFG.paper; x.fillRect(0,0,600,600); x.strokeStyle=CFG.ink; x.lineCap="round"; x.lineJoin="round"; /* 글씨가 있는 자리 중심으로 잘라 담는다(여백 30%, 너무 작으면 종이 절반 크기) */
+      const all=strokes.flat(); let bx0=Math.min(...all.map(p=>p.x)), bx1=Math.max(...all.map(p=>p.x)), by0=Math.min(...all.map(p=>p.y)), by1=Math.max(...all.map(p=>p.y));
+      let side=Math.max(bx1-bx0,by1-by0)*1.6, minSide=Math.min(rect.w,rect.h)*0.5; side=Math.max(side,minSide); const cx=(bx0+bx1)/2, cy=(by0+by1)/2;
+      const k=600/side, ox=cx-side/2, oy=cy-side/2; x.lineWidth=Math.max(2,CFG.inkWidth*k);
+      for(const s of strokes){ x.beginPath(); s.forEach((p,i)=>{ const px=(p.x-ox)*k, py=(p.y-oy)*k; i?x.lineTo(px,py):x.moveTo(px,py); }); x.stroke(); } return c.toDataURL("image/png"); } };
 })();
 
 // ---------- 글자 조립 ----------
@@ -375,9 +398,25 @@ async function boot(){
   const last=sessions[0]?.date; if(last && Date.now()-last>CFG.dormantDays*86400000){ show("dormant"); return; }
   goHome();
 }
-function goHome(){ clearTimers(); plan=planToday(sessions); $("homeSyl").textContent=plan.syllable; show("home");
+function goHome(){ clearTimers(); plan=planToday(sessions); $("homeSyl").textContent=plan.syllable; renderPile(); show("home");
   timers.home=setTimeout(()=>{ /* 켜기 전 거부권: 아이가 안 오면 그날 끝 */ show("ended"); }, CFG.homeWait); }
 $("homeCenter").addEventListener("pointerup",()=>{ if(stage!=="home") return; startSession(); });
+
+// ---------- 내 글씨 책 ----------
+// 지난 14일 종이(아이 글씨)만. 오래된 것부터. 숫자·날짜·개수 없음, 지우기 없음(어른 메뉴에서도 편집 없음). 언니 글씨 없음.
+function bookPages(){ const cut=Date.now()-CFG.dormantDays*86400000; return sessions.filter(s=>s.thumb && s.date>cut && (s.strokeCount||0)>0).sort((a,b)=>a.date-b.date); }
+function renderPile(){ const pile=$("pile"); const pg=bookPages(); pile.hidden = pg.length===0; pile.innerHTML="";
+  for(const s of pg.slice(-3)){ const d=document.createElement("div"); d.className="sheet"; const i=new Image(); i.src=s.thumb; i.alt=""; d.appendChild(i); pile.appendChild(d); } }
+$("pile").addEventListener("pointerup",e=>{ e.stopPropagation(); if(stage==="home") openBook(); });
+function openBook(){ clearTimers(); const pages=bookPages(); if(!pages.length){ return; } let idx=0; const bk=$("book"); show("book");
+  const draw=()=>{ bk.innerHTML=""; const p=document.createElement("div"); if(idx>=pages.length){ p.className="page blank"; p.innerHTML='<div class="sheet"></div>'; } else { p.className="page"; const i=new Image(); i.src=pages[idx].thumb; i.alt=""; p.appendChild(i); } bk.appendChild(p); armIdle(); };
+  const armIdle=()=>{ clearTimeout(timers.book); timers.book=setTimeout(goHome, 15000); };   // 가만히 15초면 홈
+  let sx=null; bk.onpointerdown=e=>{ sx=e.clientX; }; bk.onpointerup=e=>{ if(sx==null) return; const dx=e.clientX-sx; sx=null;
+    if(idx>=pages.length){ goHome(); return; }                       // 빈 종이에서는 어떤 터치든 홈
+    if(dx<-40) idx++; else if(dx>40) idx=Math.max(0,idx-1); else idx++;   // 탭도 다음 장
+    draw(); };
+  bk.onpointercancel=()=>{ sx=null; };
+  draw(); }
 $("ended").addEventListener("pointerup",()=>{ if(stage==="ended") goHome(); });
 $("undormant").addEventListener("click",goHome);
 
@@ -390,11 +429,14 @@ function startWriting(){ show("canvasStage"); CV.layout(); if(settings.swap){ CV
 $("handoff").addEventListener("click",()=>{ if(settings.swap){ endSession(); return; } const a=CV.adultStrokes.slice(); CV.setMode("child"); CV.showAdult(a, adultLifetime); });
 CV.onPenUp=()=>Voice.playForSession(plan.syllable);
 CV.onIdle=()=>{ if($("handoff").hidden===false){ /* 어른 모드 idle → 아이 차례 */ $("handoff").click(); return; } endChild(); };
+CV.onWarn=(on)=>{ $("canvasStage").classList.toggle("dimming", !!on); };   // 종료 예고: 갑자기 꺼지지 않고 종이가 천천히 어두워진다
 function endChild(){ if(!current){ show("ended"); return; }
   Object.assign(current,{ strokeCount:CV.strokes.length, penLifts:CV.penLifts, turnCount:CV.turns, overlap:CV.overlap(), endedBy:"시간", thumb:CV.thumbnail(), strokes:CV.strokes.map(s=>s.map(p=>[Math.round(p.x),Math.round(p.y),Math.round(p.t)])) });
   if(settings.swap){ // 교대일: 아이 다음에 어른이 아이 획을 보며 따라 씀. 어른 획은 저장 안 함.
     const childStrokes=CV.strokes.slice(); CV.setMode("adult"); CV.showAdult(childStrokes, null); $("handoff").textContent="다 썼어"; return; }
-  endSession(); }
+  foldThenEnd(); }
+// 종이가 접혀 더미로 들어가는 전환. 평가 없음. 애니메이션 끝나면 종료 화면.
+function foldThenEnd(){ const st=$("canvasStage"); st.classList.add("fold"); timers.fold=setTimeout(async()=>{ await endSession(); st.classList.remove("fold","dimming"); }, 750); }
 async function endSession(){ clearTimers(); $("handoff").textContent="아이 차례"; if(current){ await DB.addSession(current); sessions=await DB.allSessions(); current=null; } show("ended"); }
 
 // ---------- 어른 메뉴 (좌상단 3초 누르기, 홈·종료 화면에서만) ----------
