@@ -44,11 +44,6 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);o
 #pile .sheet img{width:100%;height:100%;object-fit:contain;display:block;pointer-events:none;-webkit-user-drag:none}
 #pile .sheet:nth-child(1){transform:rotate(-6deg) translate(-6px,4px)} #pile .sheet:nth-child(2){transform:rotate(3deg) translate(5px,-2px)} #pile .sheet:nth-child(3){transform:rotate(-1deg)}
 /* 내 글씨 책: 한 장에 종이 한 장. 좌우 넘김만. 마지막은 빈 종이 → 홈 */
-/* 우리 집 사진: 글자를 쓴 뒤에만, 작게. 얼굴 아님, 물건만 */
-.obj{display:flex;flex-direction:column;align-items:center;gap:8px}
-.obj img{width:min(120px,18vw);height:min(120px,18vw);object-fit:cover;border-radius:10px;box-shadow:0 1px 4px rgba(27,42,74,.15);pointer-events:none;-webkit-user-drag:none}
-.obj .snap{font:15px var(--sans);color:var(--ink-soft);background:transparent;border:1px solid var(--ink-faint);border-radius:999px;padding:8px 16px}
-#book .page .obj{position:absolute;left:50%;transform:translateX(-50%);bottom:max(24px,env(safe-area-inset-bottom,0px))}
 #book{background:var(--paper);touch-action:none}
 #book .page{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
 #book .page img{pointer-events:none;-webkit-user-drag:none;user-select:none;width:min(78vw,78vh);height:min(78vw,78vh);object-fit:contain;image-rendering:auto;border-radius:10px;box-shadow:0 2px 12px rgba(27,42,74,.10)}
@@ -131,7 +126,6 @@ textarea{width:100%;min-height:120px;font:12px ui-monospace,monospace;border:1px
   <div class="stage" id="ended"><div class="center">
     <div class="paper-photo" id="endPhoto"><div class="empty">오늘 종이</div></div>
     <div class="quiet">오늘은 여기까지</div>
-    <div class="obj" id="endObj"></div>
   </div></div>
 
   <!-- 보관함 -->
@@ -251,7 +245,7 @@ const settings = {
 const DB = (()=>{
   let db; const open = ()=> new Promise((res,rej)=>{ if(db) return res(db);
     const r=indexedDB.open("firststroke",2);
-    r.onupgradeneeded=()=>{ const d=r.result; if(!d.objectStoreNames.contains("sessions")) d.createObjectStore("sessions",{keyPath:"id",autoIncrement:true}); if(!d.objectStoreNames.contains("voices")) d.createObjectStore("voices"); if(!d.objectStoreNames.contains("photos")) d.createObjectStore("photos"); };
+    r.onupgradeneeded=()=>{ const d=r.result; if(!d.objectStoreNames.contains("sessions")) d.createObjectStore("sessions",{keyPath:"id",autoIncrement:true}); if(!d.objectStoreNames.contains("voices")) d.createObjectStore("voices"); };
     r.onsuccess=()=>{db=r.result;res(db)}; r.onerror=()=>rej(r.error); });
   const tx=(store,mode,fn)=>open().then(d=>new Promise((res,rej)=>{ const t=d.transaction(store,mode); const q=fn(t.objectStore(store)); t.oncomplete=()=>res(q&&q.result); t.onerror=()=>rej(t.error); }));
   return {
@@ -260,11 +254,6 @@ const DB = (()=>{
     putVoice:(k,blob)=>tx("voices","readwrite",st=>st.put(blob,k)).catch(()=>{}),
     getVoice:(k)=>tx("voices","readonly",st=>st.get(k)).catch(()=>null),
     delVoice:(k)=>tx("voices","readwrite",st=>st.delete(k)).catch(()=>{}),
-    // 우리 집 물건 사진: 글자별 한 장, 기기 안에만, 14일 지나면 지움
-    putPhoto:(syl,dataUrl)=>tx("photos","readwrite",st=>st.put({date:Date.now(),src:dataUrl},syl)).catch(()=>{}),
-    getPhoto:(syl)=>tx("photos","readonly",st=>st.get(syl)).catch(()=>null),
-    delPhoto:(syl)=>tx("photos","readwrite",st=>st.delete(syl)).catch(()=>{}),
-    allPhotoKeys:()=>tx("photos","readonly",st=>st.getAllKeys()).catch(()=>[]),
   };
 })();
 
@@ -431,7 +420,7 @@ function runBars(syl, done){
 
 // ---------- 흐름 ----------
 async function boot(){
-  sessions=await DB.allSessions(); prunePhotos(); plan=planToday(sessions);
+  sessions=await DB.allSessions(); plan=planToday(sessions);
   $("homeSyl").textContent=plan.syllable; renderPaper(); CV.layout();
   const last=sessions[0]?.date; if(last && Date.now()-last>CFG.dormantDays*86400000){ show("dormant"); return; }
   goHome();
@@ -450,7 +439,7 @@ function renderPile(){ const pile=$("pile"); const pg=bookPages(); pile.hidden =
   for(const s of pg.slice(-3)){ const d=document.createElement("div"); d.className="sheet"; const i=new Image(); i.src=s.thumb; i.alt=""; d.appendChild(i); pile.appendChild(d); } }
 $("pile").addEventListener("pointerup",e=>{ e.stopPropagation(); if(stage==="home") openBook(); });
 function openBook(){ clearTimers(); const pages=bookPages(); if(!pages.length){ return; } let idx=0; const bk=$("book"); show("book");
-  const draw=()=>{ bk.innerHTML=""; const p=document.createElement("div"); if(idx>=pages.length){ p.className="page blank"; p.innerHTML='<div class="sheet"></div>'; } else { p.className="page"; const i=new Image(); i.src=pages[idx].thumb; i.alt=""; p.appendChild(i); DB.getPhoto(pages[idx].syllable).then(ph=>{ if(ph && p.isConnected){ const o=document.createElement("div"); o.className="obj"; const im=new Image(); im.src=ph.src; im.alt=""; o.appendChild(im); p.appendChild(o); } }); } bk.appendChild(p); armIdle(); };
+  const draw=()=>{ bk.innerHTML=""; const p=document.createElement("div"); if(idx>=pages.length){ p.className="page blank"; p.innerHTML='<div class="sheet"></div>'; } else { p.className="page"; const i=new Image(); i.src=pages[idx].thumb; i.alt=""; p.appendChild(i); } bk.appendChild(p); armIdle(); };
   const armIdle=()=>{ clearTimeout(timers.book); timers.book=setTimeout(goHome, 15000); };   // 가만히 15초면 홈
   let sx=null; bk.onpointerdown=e=>{ sx=e.clientX; }; bk.onpointerup=e=>{ if(sx==null) return; const dx=e.clientX-sx; sx=null;
     if(idx>=pages.length){ goHome(); return; }                       // 빈 종이에서는 어떤 터치든 홈
@@ -478,19 +467,7 @@ function endChild(){ if(!current){ show("ended"); return; }
   foldThenEnd(); }
 // 종이가 접혀 더미로 들어가는 전환. 평가 없음. 애니메이션 끝나면 종료 화면.
 function foldThenEnd(){ const st=$("canvasStage"); st.classList.add("fold"); timers.fold=setTimeout(async()=>{ await endSession(); st.classList.remove("fold","dimming"); }, 750); }
-let lastSyl=null;
-async function endSession(){ clearTimers(); $("handoff").textContent="아이 차례"; if(current){ lastSyl=current.syllable; await DB.addSession(current); sessions=await DB.allSessions(); current=null; } await renderEndObj(); show("ended"); }
-// 쓴 뒤에만: 그 글자로 시작하는 우리 집 물건 사진. 어른이 그 자리에서 한 번 찍는다. 등록 메뉴 없음.
-async function renderEndObj(){ const box=$("endObj"); box.innerHTML=""; const syl=lastSyl||plan.syllable; if(!syl) return;
-  const ph=await DB.getPhoto(syl);
-  if(ph){ const i=new Image(); i.src=ph.src; i.alt=""; box.appendChild(i); }
-  const lab=document.createElement("label"); lab.innerHTML=`<input type="file" accept="image/*" capture="environment" hidden><button type="button" class="snap">${ph?"다시 찍기":`'${syl}'로 시작하는 우리 집 물건 찍기`}</button>`;
-  lab.addEventListener("pointerup",e=>e.stopPropagation()); lab.addEventListener("click",e=>e.stopPropagation());
-  lab.querySelector("button").addEventListener("click",()=>lab.querySelector("input").click());
-  lab.querySelector("input").addEventListener("change",async e=>{ const f=e.target.files[0]; if(!f) return; const url=await shrinkPhoto(f); await DB.putPhoto(syl,url); renderEndObj(); clearTimers(); });
-  box.appendChild(lab); if(!ph){ const h=document.createElement("div"); h.className="quiet"; h.style.fontSize="13px"; h.textContent="얼굴 말고 물건만 · 이 기기 안에만 · 14일 뒤 지워져요"; box.appendChild(h); } }
-function shrinkPhoto(file){ return new Promise(res=>{ const i=new Image(); i.onload=()=>{ const max=600, k=Math.min(1,max/Math.max(i.width,i.height)); const c=document.createElement("canvas"); c.width=Math.round(i.width*k); c.height=Math.round(i.height*k); c.getContext("2d").drawImage(i,0,0,c.width,c.height); URL.revokeObjectURL(i.src); res(c.toDataURL("image/jpeg",.82)); }; i.src=URL.createObjectURL(file); }); }
-async function prunePhotos(){ const cut=Date.now()-CFG.dormantDays*86400000; for(const k of (await DB.allPhotoKeys())||[]){ const p=await DB.getPhoto(k); if(p && p.date<cut) await DB.delPhoto(k); } }
+async function endSession(){ clearTimers(); $("handoff").textContent="아이 차례"; if(current){ await DB.addSession(current); sessions=await DB.allSessions(); current=null; } show("ended"); }
 
 // ---------- 어른 메뉴 (좌상단 3초 누르기, 홈·종료 화면에서만) ----------
 let pressT=null; const trig=$("trigger");
