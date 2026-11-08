@@ -573,8 +573,9 @@ function renderEnded(){ const sh=$("endSheet"), hint=$("sealHint"); const ok=las
 // 낙관: 종이를 꾹 누른 자리에 붉은 이름 도장. 한 장에 한 번. 썸네일에 새겨져 책에도 남는다.
 let sealHold=null;
 $("endSheet").addEventListener("pointerdown",e=>{ e.stopPropagation(); if(!lastSession||lastSession.sealed) return; const r=e.currentTarget.getBoundingClientRect(); const nx=(e.clientX-r.left)/r.width, ny=(e.clientY-r.top)/r.height; clearTimeout(sealHold); sealHold=setTimeout(()=>stamp(nx,ny),350); });
-["pointerup","pointercancel","pointerleave"].forEach(ev=>$("endSheet").addEventListener(ev,e=>{ e.stopPropagation(); clearTimeout(sealHold); }));
-async function stamp(nx,ny){ if(!lastSession||lastSession.sealed) return; const s=lastSession; s.sealed=true; $("sealHint").hidden=true;
+let sealFired=false;
+["pointerup","pointercancel","pointerleave"].forEach(ev=>$("endSheet").addEventListener(ev,e=>{ e.stopPropagation(); clearTimeout(sealHold); if(ev==="pointerup"){ if(sealFired){ sealFired=false; } else if(stage==="ended") goHome(); } }));   // 짧게 톡 치면 홈, 꾹 누르면 도장
+async function stamp(nx,ny){ if(!lastSession||lastSession.sealed) return; sealFired=true; const s=lastSession; s.sealed=true; $("sealHint").hidden=true;
   const img=new Image(); img.src=s.thumb; await img.decode().catch(()=>{});
   const c=document.createElement("canvas"); c.width=c.height=600; const x=c.getContext("2d"); x.drawImage(img,0,0,600,600);
   const sz=108, px=Math.min(600-sz/2,Math.max(sz/2,nx*600)), py=Math.min(600-sz/2,Math.max(sz/2,ny*600));
