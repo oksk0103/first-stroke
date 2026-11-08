@@ -101,6 +101,7 @@ canvas{position:absolute;top:0;left:0;touch-action:none}
 #siblingDivider{position:absolute;top:40px;bottom:40px;width:2px;background:var(--ink-faint);display:none}
 .btn{position:absolute;left:max(28px,env(safe-area-inset-left,0px));bottom:max(28px,env(safe-area-inset-bottom,0px));
   background:var(--ink);color:var(--paper);border:0;border-radius:999px;padding:14px 26px;font:500 20px var(--sans);opacity:.85}
+.btn.done{background:var(--paper);color:var(--ink);box-shadow:0 0 0 2px var(--ink-soft),0 2px 8px rgba(27,42,74,.15);opacity:1;padding:18px 32px;font-size:22px}
 .btn:focus-visible{outline:3px solid var(--ink-soft);outline-offset:3px}
 /* 막대 */
 .gl{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
@@ -167,6 +168,7 @@ textarea{width:100%;min-height:120px;font:12px ui-monospace,monospace;border:1px
     <div id="why" class="off"></div>
     <div id="inks" class="off"></div>
     <button class="btn" id="handoff" hidden>아이 차례</button>
+    <button class="btn done" id="childDone" hidden>다 썼어요</button>
   </div>
 
   <!-- 종료: 암전 아님. 종이 사진이 다시. -->
@@ -477,7 +479,7 @@ const CV = (()=>{
     const x=ctx(a.target==="sib"?sib:(mode==="adult"?adult:child)); if(a.target==="sib"){ x.strokeStyle="rgba(27,42,74,.7)"; } else if(mode==="child"){ x.strokeStyle=a.color; }
     const n=a.pts.length; if(n>=2){ x.fillStyle=x.strokeStyle; seg(x,q,p,a.target==="sib"?.8:1); if(a.target==="main"){ const v=Math.hypot(p.x-q.x,p.y-q.y)/Math.max(1,p.t-q.t); Scratch.move(v); } } });
   function endStroke(e){ const a=active[e.pointerId]; if(!a) return; delete active[e.pointerId]; Scratch.stop(); if(a.target==="sib") return;
-    const pts=a.pts; pts.color=a.color; if(mode==="adult"){ adultStrokes.push(pts); } else { strokes.push(pts); penLifts++; turns+=countTurns(pts); decideHand(pts); inkPool(pts); }
+    const pts=a.pts; pts.color=a.color; if(mode==="adult"){ adultStrokes.push(pts); } else { strokes.push(pts); penLifts++; turns+=countTurns(pts); decideHand(pts); inkPool(pts); $("childDone").hidden=false; }   // 한 획이라도 그으면 "다 썼어요"
     redrawAll();
     if(mode==="child") timers.sound=setTimeout(()=>onPenUp&&onPenUp(), CFG.soundDelay);
     armIdle();
@@ -493,7 +495,7 @@ const CV = (()=>{
   function overlap(){ const A=adultStrokes.flat(), C=strokes.flat(); if(!A.length||!C.length) return 0; const r=CFG.inkWidth; let near=0; for(let i=0;i<C.length;i+=2){ if(A.some(a=>Math.hypot(a.x-C[i].x,a.y-C[i].y)<r)) near++; } return near/Math.ceil(C.length/2); }
   function reset(){ if(pendingLeft){ leftHanded=true; pendingLeft=false; } strokes=[]; adultStrokes=[]; pools=[]; penLifts=0; turns=0; decided=false; rtl=0; lifetimeArmed=false; adultLife=null; for(const k in active) delete active[k]; clearTimeout(timers.idle); clearTimeout(timers.sound); clearTimeout(timers.fade); clearTimeout(timers.warn); adult.style.opacity=1; wrap.style.pointerEvents=""; layout(); }
   // 모드가 바뀌면 바로 10초 시계를 켠다: 한 획도 안 그어도 끝난다(거부권)
-  function setMode(m){ mode=m; onWarn&&onWarn(false); $("why").classList.toggle("off", m!=="adult"); $("handoff").hidden = m!=="adult"; $("inks").classList.toggle("off", m!=="child"); armIdle(); }
+  function setMode(m){ mode=m; onWarn&&onWarn(false); $("why").classList.toggle("off", m!=="adult"); $("handoff").hidden = m!=="adult"; $("childDone").hidden = true; $("inks").classList.toggle("off", m!=="child"); armIdle(); }
   function showAdult(strokesIn, lifetime){ adultStrokes=strokesIn; adult.style.opacity=1; redrawAll(); clearTimeout(timers.fade); lifetimeArmed=false; adultLife=lifetime; }   // 수명 시계는 아이의 첫 터치에서 시작(pointerdown)
   function freeze(){ wrap.style.pointerEvents="none"; for(const k in active) delete active[k]; Scratch.stop(); }
   // 두 손가락 더블탭 = 어른 획 다시 보기 (재요청 횟수 기록)
@@ -618,12 +620,14 @@ function startSession(){ clearTimers(); document.documentElement.requestFullscre
   CV.sharedWriting = plan.shared && !settings.manual; CV.reset();
   const t=barTarget(plan.syllable); if(t) runBars(t, startWriting); else startWriting(); }
 function startWriting(){ $("why").textContent=whyLine(plan); renderInks(); show("canvasStage"); CV.layout(); if(settings.swap){ CV.setMode("child"); } else { CV.setMode("adult"); } }
+// 아이가 스스로 끝내기. 안 누르면 15초 뒤 저절로 접힌다(예비).
+$("childDone").addEventListener("click",()=>{ if(stage!=="canvasStage") return; $("childDone").hidden=true; clearTimeout(timers.idle); clearTimeout(timers.warn); clearTimeout(timers.sound); if(current) current.endedBy="아이"; endChild(); });
 $("handoff").addEventListener("click",()=>{ if(settings.swap){ foldThenEnd(); return; } const a=CV.adultStrokes.slice(); CV.setMode("child"); CV.showAdult(a, adultLifetime); });
 CV.onPenUp=()=>{ if(current&&current.free) return; Voice.playForSession(plan.syllable); };
 CV.onIdle=()=>{ if($("handoff").hidden===false){ /* 어른 모드 idle → 아이 차례 */ $("handoff").click(); return; } endChild(); };
 CV.onWarn=(on)=>{ $("canvasStage").classList.toggle("dimming", !!on); };   // 종료 예고: 갑자기 꺼지지 않고 종이가 천천히 어두워진다
 function endChild(){ if(!current){ show("ended"); return; }
-  Object.assign(current,{ strokeCount:CV.strokes.length, penLifts:CV.penLifts, turnCount:CV.turns, overlap:CV.overlap(), endedBy:"시간", thumb:CV.thumbnail(), strokes:CV.strokes.map(s=>s.map(p=>[Math.round(p.x),Math.round(p.y),Math.round(p.t)])) });
+  Object.assign(current,{ strokeCount:CV.strokes.length, penLifts:CV.penLifts, turnCount:CV.turns, overlap:CV.overlap(), endedBy:current.endedBy||"시간", thumb:CV.thumbnail(), strokes:CV.strokes.map(s=>s.map(p=>[Math.round(p.x),Math.round(p.y),Math.round(p.t)])) });
   if(settings.swap && !current.free){ // 교대일: 아이 다음에 어른이 아이 획을 보며 따라 씀. 어른 획은 저장 안 함.
     const childStrokes=CV.strokes.slice(); CV.setMode("adult"); CV.showAdult(childStrokes, null); $("handoff").textContent="다 썼어"; return; }
   foldThenEnd(); }
