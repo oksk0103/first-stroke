@@ -68,7 +68,7 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);o
 @keyframes pulse{to{opacity:.3}}
 /* 아이 차례 먹 색 고르기: 세 점. 오른쪽 아래 */
 #inks{position:absolute;right:max(24px,env(safe-area-inset-right,0px));top:max(24px,env(safe-area-inset-top,0px));display:flex;gap:16px}
-#inks span{width:56px;height:56px;border-radius:50%;box-shadow:0 0 0 3px var(--paper),0 1px 4px rgba(27,42,74,.25);cursor:pointer;touch-action:manipulation;transition:transform .15s}
+#inks span{width:48px;height:48px;border-radius:50%;box-shadow:0 0 0 3px var(--paper),0 1px 4px rgba(27,42,74,.25);cursor:pointer;touch-action:manipulation;transition:transform .15s}
 #inks span.on{transform:scale(1.25);box-shadow:0 0 0 3px var(--paper),0 0 0 5px var(--ink-soft)}
 #inks.off{display:none}
 /* 자유 종이 입구: 홈 오른쪽 아래 빈 종이 한 장 */
@@ -590,9 +590,11 @@ $("homeCenter").addEventListener("pointerup",()=>{ clearTimeout(homeHold); if(st
 $("free").addEventListener("pointerup",e=>{ e.stopPropagation(); if(stage!=="home") return; startFree(); });
 function startFree(){ clearTimers(); document.documentElement.requestFullscreen?.().catch(()=>{});
   current={ date:Date.now(), syllable:"·", free:true, openedBy:settings.openedBy, note:"빈 종이", adultReplays:0 }; adultLifetime=null;
-  CV.sharedWriting=false; CV.reset(); $("why").textContent=""; show("canvasStage"); CV.layout(); CV.setMode("child"); }
+  CV.sharedWriting=false; CV.reset(); $("why").textContent=""; renderInks(); CV.warmSound(); show("canvasStage"); CV.layout(); CV.setMode("child"); }
 // 아이 차례 먹 색
-function renderInks(){ const box=$("inks"); box.innerHTML=""; for(const [name,hex] of CFG.inks){ const sp=document.createElement("span"); sp.style.background=hex; sp.title=name; sp.classList.toggle("on",hex===settings.inkColor); sp.addEventListener("pointerdown",e=>e.stopPropagation()); sp.addEventListener("pointerup",e=>{ e.stopPropagation(); settings.inkColor=hex; renderInks(); }); box.appendChild(sp); } }
+// 먹 색: 지금 색 하나만. 누를 때마다 다음 색으로(쪽빛 → 청록 → 자주 → 쪽빛)
+function renderInks(){ const box=$("inks"); box.innerHTML=""; const i=Math.max(0,CFG.inks.findIndex(([,h])=>h===settings.inkColor)); const [name,hex]=CFG.inks[i]; if(settings.inkColor!==hex) settings.inkColor=hex;
+  const sp=document.createElement("span"); sp.style.background=hex; sp.title=name; sp.addEventListener("pointerdown",e=>e.stopPropagation()); sp.addEventListener("pointerup",e=>{ e.stopPropagation(); settings.inkColor=CFG.inks[(i+1)%CFG.inks.length][1]; renderInks(); }); box.appendChild(sp); }
 
 // ---------- 내 글씨 책 ----------
 // 지난 14일 종이(아이 글씨)만. 오래된 것부터. 숫자·날짜·개수 없음, 지우기 없음(어른 메뉴에서도 편집 없음). 언니 글씨 없음.
