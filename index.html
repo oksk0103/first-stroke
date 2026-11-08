@@ -237,7 +237,7 @@ if (PHILOSOPHY.tracing || PHILOSOPHY.rewards.length || PHILOSOPHY.correctness ||
 const CFG = {
   ink:"#1B2A4A", adultInk:"#A8432E", paper:"#F4EFE4", /* 아이 = 먹, 어른 = 주묵(체본 전통) */ inkWidth:22, canvasFraction:2/3,
   soundDelay:2000, adultLifetime(n){ return n<4?null : n<=6?8000 : 5000; },   // n = 쓴 날 수. 1~3일 안 사라짐 / 4~6일 8초 / 그 뒤 5초(3초는 아이가 펜 잡기 전 사라져 폐기)
-  idleEnd:15000, warnBefore:4000,   // 태이 관찰: 생각보다 오래 집중함 → 10초에서 15초로 homeWait:30000, bookIdle:30000, dormantDays:14, barsTimeout:10000, foldMs:1100, snapHold:2000, menuHold:3000, mirrorDays:2, nameMaxPerWeek:2,
+  idleEnd:15000, warnBefore:4000, /* 태이 관찰: 생각보다 오래 집중함 → 10초에서 15초로 */ homeWait:30000, bookIdle:30000, dormantDays:14, barsTimeout:10000, foldMs:1100, snapHold:2000, menuHold:3000, mirrorDays:2, nameMaxPerWeek:2,
   writeList:["가","고","구","기","나","노","누","니","아","오","우","이"],
   // 확장 묶음: 한 번에 한 요소씩. 어른 메뉴에서 한 바퀴 돈 뒤 켠다. 받침은 없음.
   levels:[ {name:"ㅁ", syls:["마","모","무","미"]}, {name:"ㅅ", syls:["사","소","수","시"]} ],   // ㅅ은 늦은 음소라 ㅁ 뒤에
