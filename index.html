@@ -42,6 +42,22 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);o
 .sheetBig::after{content:"";position:absolute;left:14px;right:14px;bottom:-6px;height:6px;border-radius:0 0 12px 12px;background:#F0EADD;box-shadow:0 1px 2px rgba(27,42,74,.10);z-index:-1}
 .coverHint{font-size:14px;color:var(--ink-faint)}
 .quiet{color:var(--ink-soft);font-size:20px}
+/* 종료 화면: 방금 쓴 종이 한 장 크게. 탭하면 붉은 이름 도장(낙관) — 아이가 자기 작품에 하는 서명 */
+#endSheet{position:relative;width:min(62vw,62vh);height:min(62vw,62vh);border-radius:12px;box-shadow:0 2px 14px rgba(27,42,74,.12);overflow:hidden;background:var(--paper);touch-action:none}
+#endSheet img{width:100%;height:100%;display:block;pointer-events:none;-webkit-user-drag:none}
+#endSheet .sealAnim{position:absolute;width:18%;aspect-ratio:1;transform:translate(-50%,-50%) scale(1.6);opacity:0;animation:stamp .35s cubic-bezier(.2,.8,.2,1) forwards;pointer-events:none}
+@keyframes stamp{to{transform:translate(-50%,-50%) scale(1);opacity:1}}
+#sealHint{font-size:14px;color:var(--ink-soft)}
+/* 이름 속 글자 찾기: 가족 이름은 연하게, 오늘 글자만 먹색 */
+#names{display:flex;gap:28px;flex-wrap:wrap;justify-content:center;font-family:var(--serif);font-size:min(44px,6vh);color:var(--ink-faint);letter-spacing:.06em}
+#names b{font-weight:400;color:var(--ink)}
+/* 아이 차례 먹 색 고르기: 세 점. 오른쪽 아래 */
+#inks{position:absolute;right:max(24px,env(safe-area-inset-right,0px));bottom:max(24px,env(safe-area-inset-bottom,0px));display:flex;gap:14px}
+#inks span{width:44px;height:44px;border-radius:50%;box-shadow:0 0 0 3px var(--paper),0 1px 4px rgba(27,42,74,.25);cursor:pointer;touch-action:manipulation;transition:transform .15s}
+#inks span.on{transform:scale(1.25);box-shadow:0 0 0 3px var(--paper),0 0 0 5px var(--ink-soft)}
+#inks.off{display:none}
+/* 자유 종이 입구: 홈 오른쪽 아래 빈 종이 한 장 */
+#free{position:absolute;right:max(28px,env(safe-area-inset-right,0px));bottom:max(28px,env(safe-area-inset-bottom,0px));width:min(110px,18vw);aspect-ratio:1;border-radius:6px;background:#FBF8F1;box-shadow:0 1px 2px rgba(27,42,74,.18),0 0 0 1px rgba(27,42,74,.08);transform:rotate(4deg);cursor:pointer;touch-action:none;display:flex;align-items:flex-end;justify-content:center;padding-bottom:8px;box-sizing:border-box;font-size:12px;color:var(--ink-faint)}
 /* 오늘 주묵 담당 (어른이 보는 조용한 줄). 홈 오른쪽 위 */
 #who{position:absolute;top:max(22px,env(safe-area-inset-top,0px));right:max(24px,env(safe-area-inset-right,0px));display:flex;gap:6px;font-size:16px;color:var(--ink-soft);align-items:center;flex-wrap:wrap;justify-content:flex-end}
 #who .cap{width:100%;text-align:right;font-size:12px;color:var(--ink-faint);padding:0 6px 2px}
@@ -116,6 +132,7 @@ textarea{width:100%;min-height:120px;font:12px ui-monospace,monospace;border:1px
     </div>
   </div>
   <div id="pile" hidden></div>
+  <div id="free">빈 종이</div>
   <div id="who"></div></div>
 
   <!-- 내 글씨 책: 아이가 넘겨보는 지난 14일 종이. 숫자·날짜·편집 없음. -->
@@ -134,12 +151,16 @@ textarea{width:100%;min-height:120px;font:12px ui-monospace,monospace;border:1px
       <div id="siblingDivider"></div>
     </div>
     <div id="why" class="off"></div>
+    <div id="inks" class="off"></div>
     <button class="btn" id="handoff" hidden>아이 차례</button>
   </div>
 
   <!-- 종료: 암전 아님. 종이 사진이 다시. -->
-  <div class="stage" id="ended"><div class="center">
-    <div class="paper-photo" id="endPhoto"><div class="empty">오늘 종이</div></div>
+  <div class="stage" id="ended"><div class="center" id="endCenter">
+    <div id="endSheet" hidden><img alt=""></div>
+    <div id="sealHint" hidden>종이를 꾹 누르면 도장이 찍혀요</div>
+    <div id="names"></div>
+    <div class="paper-photo" id="endPhoto" hidden><div class="empty">오늘 종이</div></div>
     <div class="quiet">오늘은 여기까지</div>
   </div>
   <div id="pile2" class="pileEnd"></div></div>
@@ -236,7 +257,7 @@ const PHILOSOPHY = Object.freeze({ tracing:false, rewards:[], correctness:false,
 if (PHILOSOPHY.tracing || PHILOSOPHY.rewards.length || PHILOSOPHY.correctness || !PHILOSOPHY.syllableOnly || !PHILOSOPHY.adultFirst) throw new Error("철학 위반");
 
 const CFG = {
-  ink:"#1B2A4A", adultInk:"#A8432E", paper:"#F4EFE4", /* 아이 = 먹, 어른 = 주묵(체본 전통) */ inkWidth:22, canvasFraction:2/3,
+  ink:"#1B2A4A", adultInk:"#A8432E", paper:"#F4EFE4", inks:[["쪽빛","#1B2A4A"],["먹","#242424"],["청록","#1F5F5B"]], sealInk:"#B8432E", /* 아이 = 먹, 어른 = 주묵(체본 전통) */ inkWidth:22, canvasFraction:2/3,
   soundDelay:2000, adultLifetime(n){ return n<4?null : n<=6?8000 : 5000; },   // n = 쓴 날 수. 1~3일 안 사라짐 / 4~6일 8초 / 그 뒤 5초(3초는 아이가 펜 잡기 전 사라져 폐기)
   idleEnd:15000, warnBefore:4000, /* 태이 관찰: 생각보다 오래 집중함 → 10초에서 15초로 */ homeWait:30000, bookIdle:30000, dormantDays:14, barsTimeout:10000, foldMs:1100, snapHold:2000, menuHold:3000, mirrorDays:2, nameMaxPerWeek:2,
   writeList:["가","고","구","기","나","노","누","니","아","오","우","이"],
@@ -263,6 +284,7 @@ const settings = {
   get lifeStep(){ return S.get("lifeStep",0); }, set lifeStep(v){ S.set("lifeStep",v); },
   get preferChild(){ return S.get("preferChild",true); }, set preferChild(v){ S.set("preferChild",v); },
   get paper(){ return S.get("paper",""); }, set paper(v){ S.set("paper",v); },
+  get inkColor(){ return S.get("inkColor",CFG.ink); }, set inkColor(v){ S.set("inkColor",v); },
 };
 // 세션·음성은 IndexedDB (사진·획 데이터가 커서)
 const DB = (()=>{
@@ -272,7 +294,7 @@ const DB = (()=>{
     r.onsuccess=()=>{db=r.result;res(db)}; r.onerror=()=>rej(r.error); });
   const tx=(store,mode,fn)=>open().then(d=>new Promise((res,rej)=>{ const t=d.transaction(store,mode); const q=fn(t.objectStore(store)); t.oncomplete=()=>res(q&&q.result); t.onerror=()=>rej(t.error); }));
   return {
-    addSession:(s)=>tx("sessions","readwrite",st=>st.add(s)).catch(()=>{}),
+    addSession:(s)=>tx("sessions","readwrite",st=>st.add(s)).then(id=>{ s.id=id; return id; }).catch(()=>{}),
     putSession:(s)=>tx("sessions","readwrite",st=>st.put(s)).catch(()=>{}),
     allSessions:()=>tx("sessions","readonly",st=>st.getAll()).then(r=>(r||[]).sort((a,b)=>b.date-a.date)).catch(()=>[]),
     putVoice:(k,blob)=>tx("voices","readwrite",st=>st.put(blob,k)).catch(()=>{}),
@@ -288,7 +310,7 @@ function childCanWrite(d){ return CFG.easyOnsets.has(d.onset)&&CFG.easyVowels.ha
 
 // ---------- 오늘 글자 (규칙 20줄, AI 없음) ----------
 function writeListNow(){ const extra=CFG.levels.slice(0,settings.level).flatMap(l=>l.syls); return CFG.writeList.concat(extra); }
-function roundDone(sessions){ const seen=new Set(sessions.map(s=>s.syllable)); return CFG.writeList.every(s=>seen.has(s)); }
+function roundDone(sessions){ const seen=new Set(sessions.filter(s=>!s.free).map(s=>s.syllable)); return CFG.writeList.every(s=>seen.has(s)); }
 function sameDay(a,b){ const x=new Date(a), y=new Date(b); return x.getFullYear()===y.getFullYear()&&x.getMonth()===y.getMonth()&&x.getDate()===y.getDate(); }
 function daysWritten(sessions){ const d=new Set(sessions.map(s=>new Date(s.date).toDateString())); return d.size; }
 function nameSyllables(){ const names=settings.names.split(",").map(x=>x.trim()).filter(Boolean); const seen=new Set(), out=[]; for(const n of names) for(const ch of n) if(decompose(ch)&&!seen.has(ch)){ seen.add(ch); out.push(ch); } return out; }
@@ -298,7 +320,7 @@ function planToday(sessions){
   if (settings.manual) return {syllable:settings.manual, shared:false, reason:"어른이 직접 고름"};
   // 하루 한 글자: 오늘 이미 쓴 글자가 있으면 그 글자. 아이가 더 하면 같은 글자를 더 쓴다.
   // 하루 글자 수(어른 메뉴): 기본 1. 오늘 쓴 서로 다른 글자가 그 수에 닿았으면 마지막 글자를 더 쓴다. 아이가 스스로 다시 눌렀을 때만 다음 글자.
-  const todays=sessions.filter(s=>sameDay(s.date,Date.now())); const distinct=[...new Set(todays.map(s=>s.syllable))];
+  const todays=sessions.filter(s=>sameDay(s.date,Date.now())&&!s.free); const distinct=[...new Set(todays.map(s=>s.syllable))];
   if(todays.length && (settings.perDay>0 && distinct.length>=settings.perDay)){ const syl=todays[0].syllable; const d=decompose(syl); const can=d?childCanWrite(d):true; return {syllable:syl, shared:!can, reason:"오늘 글자"}; }
   const todaySyls=new Set(distinct);
   const now=Date.now(), weekAgo=now-7*86400000, mirrorAgo=now-CFG.mirrorDays*86400000;
@@ -368,9 +390,9 @@ const CV = (()=>{
     for(const c of [adult,pool,child,sib]){ c.width=W*dpr; c.height=H*dpr; c.style.width=W+"px"; c.style.height=H+"px"; }
     div.style.left=(leftHanded?w-1:W-w-1)+"px"; div.style.display=settings.sibling?"block":"none"; redrawAll(); }
   addEventListener("resize",layout);
-  function ctx(c){ const x=c.getContext("2d"); x.setTransform(dpr,0,0,dpr,0,0); x.lineCap="round"; x.lineJoin="round"; x.strokeStyle=(c===adult?CFG.adultInk:CFG.ink); x.fillStyle=x.strokeStyle; x.lineWidth=CFG.inkWidth; return x; }
+  function ctx(c){ const x=c.getContext("2d"); x.setTransform(dpr,0,0,dpr,0,0); x.lineCap="round"; x.lineJoin="round"; x.strokeStyle=(c===adult?CFG.adultInk:settings.inkColor); x.fillStyle=x.strokeStyle; x.lineWidth=CFG.inkWidth; return x; }
   function drawStroke(x,pts){ if(pts.length<2){ if(pts.length===1){ x.beginPath(); x.arc(pts[0].x,pts[0].y,CFG.inkWidth/2,0,7); x.fill(); } return; } x.beginPath(); x.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++){ const m={x:(pts[i-1].x+pts[i].x)/2,y:(pts[i-1].y+pts[i].y)/2}; x.quadraticCurveTo(pts[i-1].x,pts[i-1].y,m.x,m.y);} x.lineTo(pts.at(-1).x,pts.at(-1).y); x.stroke(); }
-  function redrawAll(){ const xc=ctx(child); xc.clearRect(0,0,W,H); for(const s of strokes) drawStroke(xc,s); for(const a of Object.values(active)) if(a.target==="main"&&mode==="child") drawStroke(xc,a.pts); const xa=ctx(adult); xa.clearRect(0,0,W,H); for(const s of adultStrokes) drawStroke(xa,s); const xp=ctx(pool); xp.clearRect(0,0,W,H); for(const q of pools){ xp.beginPath(); xp.arc(q.x,q.y,q.r,0,7); xp.fill(); } }
+  function redrawAll(){ const xc=ctx(child); xc.clearRect(0,0,W,H); for(const s of strokes){ xc.strokeStyle=xc.fillStyle=s.color||CFG.ink; drawStroke(xc,s); } for(const a of Object.values(active)) if(a.target==="main"&&mode==="child"){ xc.strokeStyle=xc.fillStyle=a.color; drawStroke(xc,a.pts); } const xa=ctx(adult); xa.clearRect(0,0,W,H); for(const s of adultStrokes) drawStroke(xa,s); const xp=ctx(pool); xp.clearRect(0,0,W,H); for(const q of pools){ xp.fillStyle=q.color||CFG.ink; xp.beginPath(); xp.arc(q.x,q.y,q.r,0,7); xp.fill(); } }
   function inRect(r,x,y){ return x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h; }
   function pos(e){ const b=wrap.getBoundingClientRect(); return {x:e.clientX-b.left,y:e.clientY-b.top,t:performance.now()}; }
   // 입력: 펜 우선, 손가락 허용. 펜을 쓴 직후 2초 안의 넓은 터치(손바닥)는 무시.
@@ -381,15 +403,15 @@ const CV = (()=>{
     // 두 번째 손가락이 오면(두 손가락 더블탭 = 어른 획 다시 보기) 진행 중 획은 버리고 둘 다 획으로 받지 않는다
     if(e.pointerType==="touch" && Object.values(active).some(a=>a.touch)){ for(const k in active) delete active[k]; redrawAll(); return; }
     e.preventDefault(); wrap.setPointerCapture?.(e.pointerId);
-    active[e.pointerId]={target,pts:[p],pen:e.pointerType==="pen",touch:e.pointerType==="touch"};
+    active[e.pointerId]={target,pts:[p],pen:e.pointerType==="pen",touch:e.pointerType==="touch",color:settings.inkColor};
     if(target==="main"){ clearTimeout(timers.idle); clearTimeout(timers.sound); clearTimeout(timers.warn); onWarn&&onWarn(false);
       if(mode==="child" && !lifetimeArmed && adultLife!=null && !sharedWriting){ lifetimeArmed=true; timers.fade=setTimeout(()=>{ adult.style.opacity=0; }, adultLife); } }   // 체본 수명은 아이가 펜을 대는 순간부터
   });
   wrap.addEventListener("pointermove",e=>{ const a=active[e.pointerId]; if(!a) return; if(a.pen) lastPenTime=performance.now(); const p=pos(e); a.pts.push(p);
-    const x=ctx(a.target==="sib"?sib:(mode==="adult"?adult:child)); if(a.target==="sib"){ x.strokeStyle="rgba(27,42,74,.7)"; x.lineWidth=CFG.inkWidth*.8; }
+    const x=ctx(a.target==="sib"?sib:(mode==="adult"?adult:child)); if(a.target==="sib"){ x.strokeStyle="rgba(27,42,74,.7)"; x.lineWidth=CFG.inkWidth*.8; } else if(mode==="child"){ x.strokeStyle=a.color; }
     const n=a.pts.length; if(n>=2){ x.beginPath(); x.moveTo(a.pts[n-2].x,a.pts[n-2].y); x.lineTo(p.x,p.y); x.stroke(); } });
   function endStroke(e){ const a=active[e.pointerId]; if(!a) return; delete active[e.pointerId]; if(a.target==="sib") return;
-    const pts=a.pts; if(mode==="adult"){ adultStrokes.push(pts); } else { strokes.push(pts); penLifts++; turns+=countTurns(pts); decideHand(pts); inkPool(pts); }
+    const pts=a.pts; pts.color=a.color; if(mode==="adult"){ adultStrokes.push(pts); } else { strokes.push(pts); penLifts++; turns+=countTurns(pts); decideHand(pts); inkPool(pts); }
     redrawAll();
     if(mode==="child") timers.sound=setTimeout(()=>onPenUp&&onPenUp(), CFG.soundDelay);
     armIdle();
@@ -401,11 +423,11 @@ const CV = (()=>{
   // 왼손 짐작: 가로획 두 개가 연달아 오른쪽→왼쪽이면. 세션 중에는 화면을 뒤집지 않고(획이 언니 자리로 넘어가 버림) 다음 세션부터 반영.
   let rtl=0; function decideHand(pts){ if(decided||pts.length<4) return; const a=pts[0], b=pts.at(-1); if(Math.abs(b.x-a.x)>40 && Math.abs(b.x-a.x)>Math.abs(b.y-a.y)){ if(b.x<a.x){ if(++rtl>=2){ decided=true; pendingLeft=true; } } else { decided=true; } } }
   // 먹 고임: 끝에서 0.3초 이상 머문 자리만 +4pt. 떨림은 보상 안 함.
-  function inkPool(pts){ const end=pts.at(-1); let dwell=0; for(let i=pts.length-1;i>=0;i--){ if(Math.hypot(pts[i].x-end.x,pts[i].y-end.y)>6) break; dwell=end.t-pts[i].t; } if(dwell<300) return; pools.push({x:end.x,y:end.y,r:CFG.inkWidth/2+4}); const x=ctx(pool); x.beginPath(); x.arc(end.x,end.y,CFG.inkWidth/2+4,0,7); x.fill(); }
+  function inkPool(pts){ const end=pts.at(-1); let dwell=0; for(let i=pts.length-1;i>=0;i--){ if(Math.hypot(pts[i].x-end.x,pts[i].y-end.y)>6) break; dwell=end.t-pts[i].t; } if(dwell<300) return; pools.push({x:end.x,y:end.y,r:CFG.inkWidth/2+4,color:pts.color}); const x=ctx(pool); x.fillStyle=pts.color||CFG.ink; x.beginPath(); x.arc(end.x,end.y,CFG.inkWidth/2+4,0,7); x.fill(); }
   function overlap(){ const A=adultStrokes.flat(), C=strokes.flat(); if(!A.length||!C.length) return 0; const r=CFG.inkWidth; let near=0; for(let i=0;i<C.length;i+=2){ if(A.some(a=>Math.hypot(a.x-C[i].x,a.y-C[i].y)<r)) near++; } return near/Math.ceil(C.length/2); }
   function reset(){ if(pendingLeft){ leftHanded=true; pendingLeft=false; } strokes=[]; adultStrokes=[]; pools=[]; penLifts=0; turns=0; decided=false; rtl=0; lifetimeArmed=false; adultLife=null; for(const k in active) delete active[k]; clearTimeout(timers.idle); clearTimeout(timers.sound); clearTimeout(timers.fade); clearTimeout(timers.warn); adult.style.opacity=1; wrap.style.pointerEvents=""; layout(); }
   // 모드가 바뀌면 바로 10초 시계를 켠다: 한 획도 안 그어도 끝난다(거부권)
-  function setMode(m){ mode=m; onWarn&&onWarn(false); $("why").classList.toggle("off", m!=="adult"); $("handoff").hidden = m!=="adult"; armIdle(); }
+  function setMode(m){ mode=m; onWarn&&onWarn(false); $("why").classList.toggle("off", m!=="adult"); $("handoff").hidden = m!=="adult"; $("inks").classList.toggle("off", m!=="child"); armIdle(); }
   function showAdult(strokesIn, lifetime){ adultStrokes=strokesIn; adult.style.opacity=1; redrawAll(); clearTimeout(timers.fade); lifetimeArmed=false; adultLife=lifetime; }   // 수명 시계는 아이의 첫 터치에서 시작(pointerdown)
   function freeze(){ wrap.style.pointerEvents="none"; for(const k in active) delete active[k]; }
   // 두 손가락 더블탭 = 어른 획 다시 보기 (재요청 횟수 기록)
@@ -415,7 +437,7 @@ const CV = (()=>{
       const all=strokes.flat(); let bx0=Math.min(...all.map(p=>p.x)), bx1=Math.max(...all.map(p=>p.x)), by0=Math.min(...all.map(p=>p.y)), by1=Math.max(...all.map(p=>p.y));
       let side=Math.max(bx1-bx0,by1-by0)*1.6, minSide=Math.min(rect.w,rect.h)*0.5; side=Math.max(side,minSide); const cx=(bx0+bx1)/2, cy=(by0+by1)/2;
       const k=600/side, ox=cx-side/2, oy=cy-side/2; x.lineWidth=Math.max(2,CFG.inkWidth*k);
-      for(const s of strokes){ x.beginPath(); s.forEach((p,i)=>{ const px=(p.x-ox)*k, py=(p.y-oy)*k; i?x.lineTo(px,py):x.moveTo(px,py); }); x.stroke(); } return c.toDataURL("image/png"); } };
+      for(const s of strokes){ x.strokeStyle=s.color||CFG.ink; x.beginPath(); s.forEach((p,i)=>{ const px=(p.x-ox)*k, py=(p.y-oy)*k; i?x.lineTo(px,py):x.moveTo(px,py); }); x.stroke(); } return c.toDataURL("image/png"); } };
 })();
 
 // ---------- 글자 조립 ----------
@@ -489,7 +511,18 @@ function renderWho(){ const w=$("who"); w.innerHTML=""; const hs=helpers(); if(!
 function childName(){ return settings.names.split(",").map(x=>x.trim()).filter(Boolean)[0]||"아이"; }
 function goHome(){ clearTimers(); plan=planToday(sessions); $("homeSyl").textContent=plan.syllable; $("coverTitle").textContent=`${childName()}의 공책`; renderPile(); renderWho(); show("home");
   timers.home=setTimeout(()=>{ /* 켜기 전 거부권: 아이가 안 오면 그날 끝 */ show("ended"); }, CFG.homeWait); }
-$("homeCenter").addEventListener("pointerup",()=>{ if(stage!=="home") return; startSession(); });
+// 홈 글자: 탭하면 시작, 길게(0.6초) 누르면 소리만 듣기 (누르면 소리 — 콩순이의 그 재미를 음절로)
+let homeHold=null, homeHeard=false;
+$("homeCenter").addEventListener("pointerdown",()=>{ if(stage!=="home") return; homeHeard=false; clearTimeout(homeHold); homeHold=setTimeout(()=>{ homeHeard=true; Voice.playForSession(plan.syllable); clearTimers(); timers.home=setTimeout(()=>show("ended"), CFG.homeWait); },600); });
+$("homeCenter").addEventListener("pointerup",()=>{ clearTimeout(homeHold); if(stage!=="home") return; if(homeHeard){ homeHeard=false; return; } startSession(); });
+["pointercancel","pointerleave"].forEach(ev=>$("homeCenter").addEventListener(ev,()=>clearTimeout(homeHold)));
+// 빈 종이: 글자 없이 그냥 그린다. 어른 차례 없음, 소리 없음. 책에 남는다.
+$("free").addEventListener("pointerup",e=>{ e.stopPropagation(); if(stage!=="home") return; startFree(); });
+function startFree(){ clearTimers(); document.documentElement.requestFullscreen?.().catch(()=>{});
+  current={ date:Date.now(), syllable:"·", free:true, openedBy:settings.openedBy, note:"빈 종이", adultReplays:0 }; adultLifetime=null;
+  CV.sharedWriting=false; CV.reset(); $("why").textContent=""; show("canvasStage"); CV.layout(); CV.setMode("child"); }
+// 아이 차례 먹 색
+function renderInks(){ const box=$("inks"); box.innerHTML=""; for(const [name,hex] of CFG.inks){ const sp=document.createElement("span"); sp.style.background=hex; sp.title=name; sp.classList.toggle("on",hex===settings.inkColor); sp.addEventListener("pointerdown",e=>e.stopPropagation()); sp.addEventListener("pointerup",e=>{ e.stopPropagation(); settings.inkColor=hex; renderInks(); }); box.appendChild(sp); } }
 
 // ---------- 내 글씨 책 ----------
 // 지난 14일 종이(아이 글씨)만. 오래된 것부터. 숫자·날짜·개수 없음, 지우기 없음(어른 메뉴에서도 편집 없음). 언니 글씨 없음.
@@ -515,21 +548,44 @@ function startSession(){ clearTimers(); document.documentElement.requestFullscre
   adultLifetime = CFG.adultLifetime(daysWritten(sessions)+1+settings.lifeStep);   // 세션 수가 아니라 쓴 날 수
   CV.sharedWriting = plan.shared && !settings.manual; CV.reset();
   const t=barTarget(plan.syllable); if(t) runBars(t, startWriting); else startWriting(); }
-function startWriting(){ $("why").textContent=whyLine(plan); show("canvasStage"); CV.layout(); if(settings.swap){ CV.setMode("child"); } else { CV.setMode("adult"); } }
+function startWriting(){ $("why").textContent=whyLine(plan); renderInks(); show("canvasStage"); CV.layout(); if(settings.swap){ CV.setMode("child"); } else { CV.setMode("adult"); } }
 $("handoff").addEventListener("click",()=>{ if(settings.swap){ foldThenEnd(); return; } const a=CV.adultStrokes.slice(); CV.setMode("child"); CV.showAdult(a, adultLifetime); });
-CV.onPenUp=()=>Voice.playForSession(plan.syllable);
+CV.onPenUp=()=>{ if(current&&current.free) return; Voice.playForSession(plan.syllable); };
 CV.onIdle=()=>{ if($("handoff").hidden===false){ /* 어른 모드 idle → 아이 차례 */ $("handoff").click(); return; } endChild(); };
 CV.onWarn=(on)=>{ $("canvasStage").classList.toggle("dimming", !!on); };   // 종료 예고: 갑자기 꺼지지 않고 종이가 천천히 어두워진다
 function endChild(){ if(!current){ show("ended"); return; }
   Object.assign(current,{ strokeCount:CV.strokes.length, penLifts:CV.penLifts, turnCount:CV.turns, overlap:CV.overlap(), endedBy:"시간", thumb:CV.thumbnail(), strokes:CV.strokes.map(s=>s.map(p=>[Math.round(p.x),Math.round(p.y),Math.round(p.t)])) });
-  if(settings.swap){ // 교대일: 아이 다음에 어른이 아이 획을 보며 따라 씀. 어른 획은 저장 안 함.
+  if(settings.swap && !current.free){ // 교대일: 아이 다음에 어른이 아이 획을 보며 따라 씀. 어른 획은 저장 안 함.
     const childStrokes=CV.strokes.slice(); CV.setMode("adult"); CV.showAdult(childStrokes, null); $("handoff").textContent="다 썼어"; return; }
   foldThenEnd(); }
 // 종이가 접혀 더미로 들어가는 전환. 평가 없음. 애니메이션 끝나면 종료 화면.
 function foldThenEnd(){ const st=$("canvasStage"); CV.freeze(); if(matchMedia("(prefers-reduced-motion: reduce)").matches){ endSession(); return; }
   const pile=$("pile"); if(!pile.hidden){ const r=pile.getBoundingClientRect(), b=st.getBoundingClientRect(); st.style.transformOrigin=`${((r.left+r.width/2-b.left)/b.width*100).toFixed(1)}% ${((r.top+r.height/2-b.top)/b.height*100).toFixed(1)}%`; }   // 더미가 있는 자리로 접힌다
   st.classList.add("fold"); timers.fold=setTimeout(async()=>{ await endSession(); st.classList.remove("fold","dimming"); }, CFG.foldMs); }
-async function endSession(){ clearTimers(); $("handoff").textContent="아이 차례"; if(current){ await DB.addSession(current); sessions=await DB.allSessions(); current=null; await pruneOld(); } renderPile(); show("ended"); }
+let lastSession=null;
+async function endSession(){ clearTimers(); $("handoff").textContent="아이 차례"; if(current){ await DB.addSession(current); lastSession=current; sessions=await DB.allSessions(); current=null; await pruneOld(); } renderPile(); renderEnded(); show("ended"); }
+// 종료 화면: 방금 쓴 종이 + 도장 자리 + 이름 속 글자 찾기
+function renderEnded(){ const sh=$("endSheet"), hint=$("sealHint"); const ok=lastSession && lastSession.thumb && (lastSession.strokeCount||0)>0;
+  sh.hidden=!ok; hint.hidden=!ok||!!lastSession.sealed; if(ok){ sh.querySelector("img").src=lastSession.thumb; sh.querySelectorAll(".sealAnim").forEach(e=>e.remove()); }
+  const nm=$("names"); nm.innerHTML=""; const syl=lastSession&&!lastSession.free?lastSession.syllable:""; if(syl && [...syl].length===1){
+    const names=settings.names.split(",").map(x=>x.trim()).filter(Boolean).filter(n=>n.includes(syl));
+    for(const n of names){ const d=document.createElement("div"); for(const ch of n){ const e=document.createElement(ch===syl?"b":"span"); e.textContent=ch; d.appendChild(e); } nm.appendChild(d); } } }
+// 낙관: 종이를 꾹 누른 자리에 붉은 이름 도장. 한 장에 한 번. 썸네일에 새겨져 책에도 남는다.
+let sealHold=null;
+$("endSheet").addEventListener("pointerdown",e=>{ e.stopPropagation(); if(!lastSession||lastSession.sealed) return; const r=e.currentTarget.getBoundingClientRect(); const nx=(e.clientX-r.left)/r.width, ny=(e.clientY-r.top)/r.height; clearTimeout(sealHold); sealHold=setTimeout(()=>stamp(nx,ny),350); });
+["pointerup","pointercancel","pointerleave"].forEach(ev=>$("endSheet").addEventListener(ev,e=>{ e.stopPropagation(); clearTimeout(sealHold); }));
+async function stamp(nx,ny){ if(!lastSession||lastSession.sealed) return; const s=lastSession; s.sealed=true; $("sealHint").hidden=true;
+  const img=new Image(); img.src=s.thumb; await img.decode().catch(()=>{});
+  const c=document.createElement("canvas"); c.width=c.height=600; const x=c.getContext("2d"); x.drawImage(img,0,0,600,600);
+  const sz=108, px=Math.min(600-sz/2,Math.max(sz/2,nx*600)), py=Math.min(600-sz/2,Math.max(sz/2,ny*600));
+  drawSeal(x,px,py,sz); s.thumb=c.toDataURL("image/png"); await DB.putSession(s); sessions=await DB.allSessions();
+  const sh=$("endSheet"); const a=document.createElement("canvas"); a.width=a.height=220; drawSeal(a.getContext("2d"),110,110,220); a.className="sealAnim"; a.style.left=(nx*100)+"%"; a.style.top=(ny*100)+"%"; sh.appendChild(a); thud();
+  setTimeout(()=>{ sh.querySelector("img").src=s.thumb; a.remove(); renderPile(); },400); }
+function drawSeal(x,cx,cy,sz){ const name=childName(); x.save(); x.translate(cx,cy); x.rotate(-0.06); x.fillStyle=CFG.sealInk; x.globalAlpha=.92; const r=sz*0.1; x.beginPath(); x.roundRect(-sz/2,-sz/2,sz,sz,r); x.fill(); x.globalAlpha=1; x.fillStyle=CFG.paper; x.textAlign="center"; x.textBaseline="middle";
+  const chars=[...name].slice(0,4); const fs = chars.length<=1? sz*0.62 : chars.length===2? sz*0.44 : sz*0.3; x.font=`${fs}px RIDIBatang, serif`;
+  if(chars.length<=1) x.fillText(chars[0]||"", 0, 0); else if(chars.length===2){ x.fillText(chars[0],0,-fs*0.5); x.fillText(chars[1],0,fs*0.5); } else { const col=Math.ceil(chars.length/2); chars.forEach((ch,i)=>{ const cI=Math.floor(i/col), rI=i%col; x.fillText(ch,(cI?-1:1)*fs*0.55*(chars.length>2?1:0),(rI-(col-1)/2)*fs*1.05); }); }
+  x.restore(); }
+function thud(){ try{ const ac=AC=AC||new (window.AudioContext||window.webkitAudioContext)(); if(ac.state==="suspended") ac.resume(); const o=ac.createOscillator(), g=ac.createGain(); o.type="sine"; o.frequency.setValueAtTime(120,ac.currentTime); o.frequency.exponentialRampToValueAtTime(50,ac.currentTime+.18); g.gain.setValueAtTime(.35,ac.currentTime); g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.2); o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime+.22);}catch{} }
 // 14일 지난 세션은 획 좌표·썸네일을 비우고 통계만 남긴다(저장소가 끝없이 커지지 않게)
 async function pruneOld(){ const cut=Date.now()-CFG.dormantDays*86400000; let changed=false; for(const s of sessions){ if(s.date<cut && (s.strokes||s.thumb)){ delete s.strokes; delete s.thumb; await DB.putSession(s); changed=true; } } if(changed) sessions=await DB.allSessions(); }
 
