@@ -164,8 +164,8 @@ textarea{width:100%;min-height:120px;font:12px ui-monospace,monospace;border:1px
 
     <section>
       <h2>하루 글자 수</h2>
-      <div class="row"><select id="mPerDay"><option value="1">하루 한 글자</option><option value="2">두 글자까지</option><option value="0">아이가 원하는 만큼</option></select></div>
-      <p class="hint">아이가 끝낸 뒤 스스로 다시 눌렀을 때만 다음 글자가 나와요. 어른이 권하지는 않기.</p>
+      <div class="row"><select id="mPerDay"><option value="0">아이가 원하는 만큼</option><option value="2">두 글자까지</option><option value="1">하루 한 글자</option></select></div>
+      <p class="hint">기본은 제한 없음. 아이가 끝낸 뒤 스스로 다시 누르면 다음 글자가 나와요. 멈추는 건 아이가 정하고, 어른은 권하지 않기.</p>
     </section>
 
     <section>
@@ -255,7 +255,7 @@ const settings = {
   get openedBy(){ return S.get("openedBy","아빠"); }, set openedBy(v){ S.set("openedBy",v); },
   get excluded(){ return S.get("excluded",[]); }, set excluded(v){ S.set("excluded",v); },
   get level(){ return S.get("level",0); }, set level(v){ S.set("level",v); },
-  get perDay(){ return S.get("perDay",1); }, set perDay(v){ S.set("perDay",v); },   // 하루 글자 수: 1 / 2 / 0 = 아이가 원하는 만큼
+  get perDay(){ return S.get("perDay",0); }, set perDay(v){ S.set("perDay",v); },   // 하루 글자 수: 1 / 2 / 0 = 아이가 원하는 만큼
   get manual(){ return S.get("manual",""); }, set manual(v){ S.set("manual",v); },
   get swap(){ return S.get("swap",false); }, set swap(v){ S.set("swap",v); },
   get sibling(){ return S.get("sibling",false); }, set sibling(v){ S.set("sibling",v); },
