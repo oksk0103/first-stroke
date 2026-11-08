@@ -199,6 +199,7 @@ textarea{width:100%;min-height:120px;font:12px ui-monospace,monospace;border:1px
     <section>
       <h2>낱말</h2>
       <label class="tog"><input type="checkbox" id="mWords" checked> 아는 글자로 된 낱말 섞기 (아기·나무·오이…)</label>
+      <label class="tog"><input type="checkbox" id="mScratch" checked> 쓸 때 사각사각 소리 (종이에 붓 스치는 소리, 결과음 아님)</label>
       <p class="hint">두 글자를 다 써 본 뒤에만 나와요. 네 번에 한 번꼴. 한 종이에 두 글자를 씁니다.</p>
     </section>
 
@@ -305,6 +306,7 @@ const settings = {
   get inkColor(){ return S.get("inkColor",CFG.ink); }, set inkColor(v){ S.set("inkColor",v); },
   get notebook(){ return S.get("notebook","ko"); }, set notebook(v){ S.set("notebook",v); },   // ko | abc | num
   get words(){ return S.get("words",true); }, set words(v){ S.set("words",v); },
+  get scratch(){ return S.get("scratch",true); }, set scratch(v){ S.set("scratch",v); },   // 쓸 때 사각사각
 };
 // 세션·음성은 IndexedDB (사진·획 데이터가 커서)
 const DB = (()=>{
@@ -420,7 +422,7 @@ const CV = (()=>{
   let dpr=1, W=0, H=0, rect={x:0,y:0,w:0,h:0}, sibRect={x:0,y:0,w:0,h:0};
   let mode="adult", strokes=[], adultStrokes=[], pools=[], penLifts=0, turns=0, decided=false, lastPenTime=0, sharedWriting=false, lifetimeArmed=false, pendingLeft=false;
   let onPenUp=null, onIdle=null, onWarn=null; let adultLife=null;
-  function rescale(oW,oH){ if(!oW||!oH||!W||!H||(oW===W&&oH===H)) return; const k=Math.min(W/oW,H/oH), dx=(W-oW*k)/2, dy=(H-oH*k)/2; const f=p=>{ p.x=p.x*k+dx; p.y=p.y*k+dy; };
+  function rescale(oW,oH){ if(!oW||!oH||!W||!H||(oW===W&&oH===H)) return; const k=Math.min(W/oW,H/oH), dx=(W-oW*k)/2, dy=(H-oH*k)/2; const f=p=>{ p.x=p.x*k+dx; p.y=p.y*k+dy; if(p.w) p.w*=k; };
     for(const s of strokes) s.forEach(f); for(const s of adultStrokes) s.forEach(f); for(const q of pools){ f(q); q.r*=k; } for(const a of Object.values(active)) a.pts.forEach(f); }   // 회전해도 획이 화면 안에 남게(같은 비율로 줄이고 가운데로)
   function layout(){ const oW=W, oH=H; dpr=Math.min(2,devicePixelRatio||1); W=wrap.clientWidth; H=wrap.clientHeight; rescale(oW,oH);
     const w=settings.sibling ? W*CFG.canvasFraction : W; rect={x:leftHanded?0:W-w, y:0, w, h:H};  /* 언니 자리를 켰을 때만 화면을 나눈다 */ sibRect={x:leftHanded?w:0,y:0,w:W-w,h:H};
@@ -428,10 +430,21 @@ const CV = (()=>{
     div.style.left=(leftHanded?w-1:W-w-1)+"px"; div.style.display=settings.sibling?"block":"none"; redrawAll(); }
   addEventListener("resize",layout);
   function ctx(c){ const x=c.getContext("2d"); x.setTransform(dpr,0,0,dpr,0,0); x.lineCap="round"; x.lineJoin="round"; x.strokeStyle=(c===adult?CFG.adultInk:settings.inkColor); x.fillStyle=x.strokeStyle; x.lineWidth=CFG.inkWidth; return x; }
-  function drawStroke(x,pts){ if(pts.length<2){ if(pts.length===1){ x.beginPath(); x.arc(pts[0].x,pts[0].y,CFG.inkWidth/2,0,7); x.fill(); } return; } x.beginPath(); x.moveTo(pts[0].x,pts[0].y); for(let i=1;i<pts.length;i++){ const m={x:(pts[i-1].x+pts[i].x)/2,y:(pts[i-1].y+pts[i].y)/2}; x.quadraticCurveTo(pts[i-1].x,pts[i-1].y,m.x,m.y);} x.lineTo(pts.at(-1).x,pts.at(-1).y); x.stroke(); }
-  function redrawAll(){ const xc=ctx(child); xc.clearRect(0,0,W,H); for(const s of strokes){ xc.strokeStyle=xc.fillStyle=s.color||CFG.ink; drawStroke(xc,s); } for(const a of Object.values(active)) if(a.target==="main"&&mode==="child"){ xc.strokeStyle=xc.fillStyle=a.color; drawStroke(xc,a.pts); } const xa=ctx(adult); xa.clearRect(0,0,W,H); for(const s of adultStrokes) drawStroke(xa,s); const xp=ctx(pool); xp.clearRect(0,0,W,H); for(const q of pools){ xp.fillStyle=q.color||CFG.ink; xp.beginPath(); xp.arc(q.x,q.y,q.r,0,7); xp.fill(); } }
+  // 획 = 경로를 따라 원을 촘촘히 찍는다(굵기가 점마다 달라도 이음매 없이 매끈하게 가늘어지고 굵어진다)
+  function seg(x,a,b,k){ const wa=(a.w||CFG.inkWidth)*k, wb=(b.w||CFG.inkWidth)*k; const d=Math.hypot(b.x-a.x,b.y-a.y); const n=Math.max(1,Math.ceil(d/Math.max(1,Math.min(wa,wb)*0.18))); x.beginPath(); for(let j=1;j<=n;j++){ const t=j/n, px=a.x+(b.x-a.x)*t, py=a.y+(b.y-a.y)*t, r=(wa+(wb-wa)*t)/2; x.moveTo(px+r,py); x.arc(px,py,r,0,7); } x.fill(); }
+  function drawStroke(x,pts,k=1){ if(!pts.length) return; x.fillStyle=x.strokeStyle; x.beginPath(); x.arc(pts[0].x,pts[0].y,(pts[0].w||CFG.inkWidth)*k/2,0,7); x.fill(); for(let i=1;i<pts.length;i++) seg(x,pts[i-1],pts[i],k); }
+  function redrawAll(){ const xc=ctx(child); xc.clearRect(0,0,W,H); for(const s of strokes){ xc.strokeStyle=xc.fillStyle=s.color||CFG.ink; drawStroke(xc,s); } for(const a of Object.values(active)) if(a.target==="main"&&mode==="child"){ xc.strokeStyle=xc.fillStyle=a.color; drawStroke(xc,a.pts); } const xa=ctx(adult); xa.clearRect(0,0,W,H); for(const s of adultStrokes) drawStroke(xa,s); const xp=ctx(pool); xp.clearRect(0,0,W,H); for(const q of pools) drawPool(xp,q); }
+  function drawPool(xp,q){ const c=q.color||CFG.ink; const gr=xp.createRadialGradient(q.x,q.y,q.r*0.6,q.x,q.y,q.r*1.9); gr.addColorStop(0,c); gr.addColorStop(1,"rgba(0,0,0,0)"); xp.globalAlpha=.22; xp.fillStyle=gr; xp.beginPath(); xp.arc(q.x,q.y,q.r*1.9,0,7); xp.fill(); xp.globalAlpha=1; xp.fillStyle=c; xp.beginPath(); xp.arc(q.x,q.y,q.r,0,7); xp.fill(); }   // 번짐: 고인 자리 둘레로 연하게 스민다
   function inRect(r,x,y){ return x>=r.x&&x<=r.x+r.w&&y>=r.y&&y<=r.y+r.h; }
   function pos(e){ const b=wrap.getBoundingClientRect(); return {x:e.clientX-b.left,y:e.clientY-b.top,t:performance.now()}; }
+  // 먹 느낌: 펜은 누르는 힘, 손가락·마우스는 속도로 굵기가 변한다(빠르면 가늘게). 이전 점과 섞어 떨림을 죽인다.
+  function widthFor(e,a,p){ const base=CFG.inkWidth; let f;
+    if(e.pointerType==="pen" && e.pressure>0) f=0.55+0.9*e.pressure;
+    else { const q=a.pts.at(-1); const v=q? Math.hypot(p.x-q.x,p.y-q.y)/Math.max(1,p.t-q.t) : 0; f=Math.min(1.15,Math.max(0.65,1.15-v*0.25)); }
+    const prev=a.pts.at(-1)?.w ?? base; return prev*0.75 + base*f*0.25; }
+  // 사각사각: 종이에 붓이 스치는 소리. 결과음이 아니라 재질음 — 움직일 때만, 속도에 비례, 멈추면 바로 잦아든다
+  const Scratch=(()=>{ let g=null, lastT=0; function ensure(){ if(g) return true; try{ const ac=AC=AC||new (window.AudioContext||window.webkitAudioContext)(); if(ac.state==="suspended") ac.resume(); const n=ac.createBuffer(1,ac.sampleRate*2,ac.sampleRate); const d=n.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1; const src=ac.createBufferSource(); src.buffer=n; src.loop=true; const bp=ac.createBiquadFilter(); bp.type="bandpass"; bp.frequency.value=2600; bp.Q.value=0.7; g=ac.createGain(); g.gain.value=0; src.connect(bp).connect(g).connect(ac.destination); src.start(); return true; }catch{ return false; } }
+    return { move(v){ if(!settings.scratch||!ensure()) return; const target=Math.min(0.09, v*0.02); g.gain.setTargetAtTime(target, AC.currentTime, 0.03); lastT=performance.now(); clearTimeout(timers.scratch); timers.scratch=setTimeout(()=>this.stop(),90); }, stop(){ if(g) g.gain.setTargetAtTime(0, AC.currentTime, 0.05); } }; })();
   // 입력: 펜 우선, 손가락 허용. 펜을 쓴 직후 2초 안의 넓은 터치(손바닥)는 무시.
   function accept(e){ if(e.pointerType==="pen"){ lastPenTime=performance.now(); return true; } if(e.pointerType==="touch"){ if(Object.values(active).some(a=>a.pen)) return false; if(lastPenTime && performance.now()-lastPenTime<2000 && (e.width||0)>40) return false; return true; } return e.pointerType==="mouse"; }   // 손바닥 무시: 펜이 닿아 있는 동안, 또는 펜 직후 2초의 넓은 터치. 펜 없이 손가락만 쓰면 전부 받는다.
   const active={};
@@ -440,14 +453,15 @@ const CV = (()=>{
     // 두 번째 손가락이 오면(두 손가락 더블탭 = 어른 획 다시 보기) 진행 중 획은 버리고 둘 다 획으로 받지 않는다
     if(e.pointerType==="touch" && Object.values(active).some(a=>a.touch)){ for(const k in active) delete active[k]; redrawAll(); return; }
     e.preventDefault(); wrap.setPointerCapture?.(e.pointerId);
+    p.w = (e.pointerType==="pen"&&e.pressure>0) ? CFG.inkWidth*(0.55+0.9*e.pressure) : CFG.inkWidth;
     active[e.pointerId]={target,pts:[p],pen:e.pointerType==="pen",touch:e.pointerType==="touch",color:settings.inkColor};
     if(target==="main"){ clearTimeout(timers.idle); clearTimeout(timers.sound); clearTimeout(timers.warn); onWarn&&onWarn(false);
       if(mode==="child" && !lifetimeArmed && adultLife!=null && !sharedWriting){ lifetimeArmed=true; timers.fade=setTimeout(()=>{ adult.style.opacity=0; }, adultLife); } }   // 체본 수명은 아이가 펜을 대는 순간부터
   });
-  wrap.addEventListener("pointermove",e=>{ const a=active[e.pointerId]; if(!a) return; if(a.pen) lastPenTime=performance.now(); const p=pos(e); a.pts.push(p);
-    const x=ctx(a.target==="sib"?sib:(mode==="adult"?adult:child)); if(a.target==="sib"){ x.strokeStyle="rgba(27,42,74,.7)"; x.lineWidth=CFG.inkWidth*.8; } else if(mode==="child"){ x.strokeStyle=a.color; }
-    const n=a.pts.length; if(n>=2){ x.beginPath(); x.moveTo(a.pts[n-2].x,a.pts[n-2].y); x.lineTo(p.x,p.y); x.stroke(); } });
-  function endStroke(e){ const a=active[e.pointerId]; if(!a) return; delete active[e.pointerId]; if(a.target==="sib") return;
+  wrap.addEventListener("pointermove",e=>{ const a=active[e.pointerId]; if(!a) return; if(a.pen) lastPenTime=performance.now(); const p=pos(e); p.w=widthFor(e,a,p); const q=a.pts.at(-1); a.pts.push(p);
+    const x=ctx(a.target==="sib"?sib:(mode==="adult"?adult:child)); if(a.target==="sib"){ x.strokeStyle="rgba(27,42,74,.7)"; } else if(mode==="child"){ x.strokeStyle=a.color; }
+    const n=a.pts.length; if(n>=2){ x.fillStyle=x.strokeStyle; seg(x,q,p,a.target==="sib"?.8:1); if(a.target==="main"){ const v=Math.hypot(p.x-q.x,p.y-q.y)/Math.max(1,p.t-q.t); Scratch.move(v); } } });
+  function endStroke(e){ const a=active[e.pointerId]; if(!a) return; delete active[e.pointerId]; Scratch.stop(); if(a.target==="sib") return;
     const pts=a.pts; pts.color=a.color; if(mode==="adult"){ adultStrokes.push(pts); } else { strokes.push(pts); penLifts++; turns+=countTurns(pts); decideHand(pts); inkPool(pts); }
     redrawAll();
     if(mode==="child") timers.sound=setTimeout(()=>onPenUp&&onPenUp(), CFG.soundDelay);
@@ -460,21 +474,22 @@ const CV = (()=>{
   // 왼손 짐작: 가로획 두 개가 연달아 오른쪽→왼쪽이면. 세션 중에는 화면을 뒤집지 않고(획이 언니 자리로 넘어가 버림) 다음 세션부터 반영.
   let rtl=0; function decideHand(pts){ if(decided||pts.length<4) return; const a=pts[0], b=pts.at(-1); if(Math.abs(b.x-a.x)>40 && Math.abs(b.x-a.x)>Math.abs(b.y-a.y)){ if(b.x<a.x){ if(++rtl>=2){ decided=true; pendingLeft=true; } } else { decided=true; } } }
   // 먹 고임: 끝에서 0.3초 이상 머문 자리만 +4pt. 떨림은 보상 안 함.
-  function inkPool(pts){ const end=pts.at(-1); let dwell=0; for(let i=pts.length-1;i>=0;i--){ if(Math.hypot(pts[i].x-end.x,pts[i].y-end.y)>6) break; dwell=end.t-pts[i].t; } if(dwell<300) return; pools.push({x:end.x,y:end.y,r:CFG.inkWidth/2+4,color:pts.color}); const x=ctx(pool); x.fillStyle=pts.color||CFG.ink; x.beginPath(); x.arc(end.x,end.y,CFG.inkWidth/2+4,0,7); x.fill(); }
+  function inkPool(pts){ const end=pts.at(-1); let dwell=0; for(let i=pts.length-1;i>=0;i--){ if(Math.hypot(pts[i].x-end.x,pts[i].y-end.y)>6) break; dwell=end.t-pts[i].t; } if(dwell<300) return; const q={x:end.x,y:end.y,r:(end.w||CFG.inkWidth)/2+4,color:pts.color}; pools.push(q); drawPool(ctx(pool),q); }
   function overlap(){ const A=adultStrokes.flat(), C=strokes.flat(); if(!A.length||!C.length) return 0; const r=CFG.inkWidth; let near=0; for(let i=0;i<C.length;i+=2){ if(A.some(a=>Math.hypot(a.x-C[i].x,a.y-C[i].y)<r)) near++; } return near/Math.ceil(C.length/2); }
   function reset(){ if(pendingLeft){ leftHanded=true; pendingLeft=false; } strokes=[]; adultStrokes=[]; pools=[]; penLifts=0; turns=0; decided=false; rtl=0; lifetimeArmed=false; adultLife=null; for(const k in active) delete active[k]; clearTimeout(timers.idle); clearTimeout(timers.sound); clearTimeout(timers.fade); clearTimeout(timers.warn); adult.style.opacity=1; wrap.style.pointerEvents=""; layout(); }
   // 모드가 바뀌면 바로 10초 시계를 켠다: 한 획도 안 그어도 끝난다(거부권)
   function setMode(m){ mode=m; onWarn&&onWarn(false); $("why").classList.toggle("off", m!=="adult"); $("handoff").hidden = m!=="adult"; $("inks").classList.toggle("off", m!=="child"); armIdle(); }
   function showAdult(strokesIn, lifetime){ adultStrokes=strokesIn; adult.style.opacity=1; redrawAll(); clearTimeout(timers.fade); lifetimeArmed=false; adultLife=lifetime; }   // 수명 시계는 아이의 첫 터치에서 시작(pointerdown)
-  function freeze(){ wrap.style.pointerEvents="none"; for(const k in active) delete active[k]; }
+  function freeze(){ wrap.style.pointerEvents="none"; for(const k in active) delete active[k]; Scratch.stop(); }
   // 두 손가락 더블탭 = 어른 획 다시 보기 (재요청 횟수 기록)
   let tapTimes=[]; wrap.addEventListener("touchstart",e=>{ if(e.touches.length===2){ const now=performance.now(); tapTimes=tapTimes.filter(t=>now-t<400); tapTimes.push(now); if(tapTimes.length>=2){ tapTimes=[]; if(mode==="child"&&adultStrokes.length){ if(current) current.adultReplays++; showAdult(adultStrokes, adultLifetime); } } } },{passive:true});
   return { layout, reset, setMode, showAdult, overlap, freeze, get strokes(){return strokes;}, get adultStrokes(){return adultStrokes;}, get penLifts(){return penLifts;}, get turns(){return turns;},
     set sharedWriting(v){ sharedWriting=v; }, set onPenUp(f){onPenUp=f;}, set onIdle(f){onIdle=f;}, set onWarn(f){onWarn=f;}, thumbnail(){ const c=document.createElement("canvas"); c.width=600; c.height=600; const x=c.getContext("2d"); x.fillStyle=CFG.paper; x.fillRect(0,0,600,600); x.strokeStyle=CFG.ink; x.lineCap="round"; x.lineJoin="round"; /* 글씨가 있는 자리 중심으로 잘라 담는다(여백 30%, 너무 작으면 종이 절반 크기) */
       const all=strokes.flat(); let bx0=Math.min(...all.map(p=>p.x)), bx1=Math.max(...all.map(p=>p.x)), by0=Math.min(...all.map(p=>p.y)), by1=Math.max(...all.map(p=>p.y));
       let side=Math.max(bx1-bx0,by1-by0)*1.6, minSide=Math.min(rect.w,rect.h)*0.5; side=Math.max(side,minSide); const cx=(bx0+bx1)/2, cy=(by0+by1)/2;
-      const k=600/side, ox=cx-side/2, oy=cy-side/2; x.lineWidth=Math.max(2,CFG.inkWidth*k);
-      for(const s of strokes){ x.strokeStyle=s.color||CFG.ink; x.beginPath(); s.forEach((p,i)=>{ const px=(p.x-ox)*k, py=(p.y-oy)*k; i?x.lineTo(px,py):x.moveTo(px,py); }); x.stroke(); } return c.toDataURL("image/png"); } };
+      const k=600/side, ox=cx-side/2, oy=cy-side/2;
+      for(const q of pools){ drawPool(x,{x:(q.x-ox)*k,y:(q.y-oy)*k,r:q.r*k,color:q.color}); }
+      for(const s of strokes){ x.strokeStyle=x.fillStyle=s.color||CFG.ink; drawStroke(x, s.map(p=>({x:(p.x-ox)*k,y:(p.y-oy)*k,w:p.w})), k); } return c.toDataURL("image/png"); } };
 })();
 
 // ---------- 글자 조립 ----------
@@ -638,7 +653,7 @@ trig.addEventListener("pointerdown",e=>{ held.add(e.pointerType+":"+e.pointerId)
 async function openMenu(){ clearTimers(); show("menu"); const p=planToday(sessions);
   $("mToday").textContent=settings.manual||p.syllable; $("mReason").textContent=settings.manual?"어른이 직접 고름":p.reason+(p.shared?" (분담)":"");
   const sel=$("mManual"); const lst = settings.notebook==="abc"?CFG.abc : settings.notebook==="num"?CFG.num : writeListNow(); sel.innerHTML='<option value="">자동</option>'+lst.map(s=>`<option value="${s}">${s}</option>`).join(""); sel.value=settings.manual;
-  $("mWords").checked=settings.words;
+  $("mWords").checked=settings.words; $("mScratch").checked=settings.scratch;
   $("mExclude").checked=settings.excluded.includes(settings.manual||p.syllable);
   $("mPerDay").value=String(settings.perDay); $("mLevel").value=String(settings.level); $("levelHint").textContent=(roundDone(sessions)?"12글자를 한 바퀴 돌았어요. 다음 묶음을 켤 수 있어요. ":"아직 한 바퀴 전이에요. ")+"한 번에 한 요소만. 아이에게 고르기 화면은 없고, 오늘 글자는 그대로 하나입니다.";
   $("mNames").value=settings.names; const ob=$("mOpenedBy"); ob.innerHTML=""; for(const h of helpers()){ const o=document.createElement("option"); o.value=h; o.textContent=h; ob.appendChild(o); } ob.value=settings.openedBy; $("mPreferChild").checked=settings.preferChild;
@@ -651,6 +666,7 @@ $("menuClose").addEventListener("click",()=>{ settings.names=$("mNames").value.s
 $("mManual").addEventListener("change",e=>{ settings.manual=e.target.value; openMenu(); });
 $("mPerDay").addEventListener("change",e=>{ settings.perDay=+e.target.value; });
 $("mWords").addEventListener("change",e=>{ settings.words=e.target.checked; });
+$("mScratch").addEventListener("change",e=>{ settings.scratch=e.target.checked; });
 $("mLevel").addEventListener("change",e=>{ settings.level=+e.target.value; if(settings.manual && !writeListNow().includes(settings.manual)) settings.manual=""; openMenu(); });
 $("mExclude").addEventListener("change",e=>{ const s=$("mToday").textContent; const ex=new Set(settings.excluded); e.target.checked?ex.add(s):ex.delete(s); settings.excluded=[...ex]; });
 $("mPreferChild").addEventListener("change",e=>settings.preferChild=e.target.checked);
