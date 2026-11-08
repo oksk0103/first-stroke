@@ -80,6 +80,43 @@ for syl in SYLS:
         cy=bar_top_edge(full, bb)
         pieces=[clip(full,x0-M,cy,x1+M,y1+M), clip(full,x0-M,y0-M,x1+M,cy)]
     pieces=[p for p in pieces if p.bounds]
+    # 부스러기 정리: 자르면서 떨어져 나온 작은 윤곽(서리프 머리 등)은 가장 가까운 다른 조각으로 돌려보낸다
+    gw_,gh_=x1-x0,y1-y0
+    def contours_of(p):
+        out=[]
+        for c in p.contours:
+            q=pathops.Path(); c.draw(q.getPen()); out.append(q)
+        return out
+    def center(b): return ((b[0]+b[2])/2,(b[1]+b[3])/2)
+    big=[[] for _ in pieces]; crumbs=[]
+    for i,p in enumerate(pieces):
+        for c in contours_of(p):
+            b=c.bounds
+            if (b[2]-b[0])<gw_*0.12 and (b[3]-b[1])<gh_*0.12: crumbs.append((i,c))
+            else: big[i].append(c)
+    for i,c in crumbs:
+        cb=center(c.bounds)
+        best=min((j for j in range(len(pieces)) if j!=i and big[j]), key=lambda j: min(
+            ((center(k.bounds)[0]-cb[0])**2+(center(k.bounds)[1]-cb[1])**2) for k in big[j]), default=i)
+        # 그쪽 조각 윤곽 중 하나가 실제로 닿아 있을 때만 옮긴다 (bbox가 맞닿음)
+        def touches(a,b): return not (a[2]<b[0]-2 or b[2]<a[0]-2 or a[3]<b[1]-2 or b[3]<a[1]-2)
+        if best!=i and any(touches(c.bounds,k.bounds) for k in big[best]): big[best].append(c)
+        else: big[i].append(c)
+    # 가로 모음(ㅗㅜ): 막대 위 꼭지가 별도 윤곽이면 모음 조각으로 (자른 선에 닿고 좁은 윤곽)
+    if vowel in "ㅗㅛㅜㅠ" and len(big)==2:
+        keep=[]
+        for c in big[0]:
+            b=c.bounds
+            if b[1]<=cy+3 and (b[2]-b[0])<gw_*0.3: big[1].append(c)
+            else: keep.append(c)
+        big[0]=keep
+    merged=[]
+    for cs in big:
+        if not cs: continue
+        u=pathops.Path()
+        for c in cs: u.addPath(c)
+        merged.append(u)
+    pieces=merged
     out[syl]={"upm":upm,"adv":g.width,"bbox":list(bb),"ghost":svg(full),
               "pieces":[{"d":svg(p),"bbox":list(p.bounds)} for p in pieces]}
     print(syl, onset, vowel, "final" if final else "", "pieces",len(pieces), [tuple(round(v) for v in p.bounds) for p in pieces])
