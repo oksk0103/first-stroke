@@ -56,7 +56,7 @@ def bar_top_edge(path, bb, tick=True):
         b=cover(path, x0-1, y, x1+1, y+step)
         if b and (b[2]-b[0])<gw*0.3: narrow_end=y+step
         else: break
-    return narrow_end if tick else top   # ㅗ: 꼭지 윗선에서 잘라 꼭지는 모음 조각 / ㅜ: 막대 윗선(위 좁은 구간은 초성의 획)
+    return narrow_end if tick else top-9   # ㅗ: 꼭지 윗선에서 잘라 꼭지는 모음 조각 / ㅜ: 막대 윗선 살짝 아래(초성 줄기가 막대에 붙는 어깨가 모음 조각에 남지 않게)
 
 out={}
 for syl in SYLS:
