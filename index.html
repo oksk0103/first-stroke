@@ -219,6 +219,7 @@ textarea{width:100%;min-height:120px;font:12px ui-monospace,monospace;border:1px
       <h2>오늘 어른 (먼저 쓰는 손)</h2>
       <div class="row"><select id="mOpenedBy"></select></div>
       <p class="hint">홈 오른쪽 위에서도 바꿀 수 있어요(가족 이름 중 아이 빼고). 언니도 주묵 담당이 될 수 있어요. 그 사람 목소리가 있으면 그걸 먼저 들려줘요.</p>
+      <div class="row"><span>녹음할 글자</span><select id="mVoiceSyl" style="flex:0 0 auto;min-width:90px"></select></div>
       <div class="row" id="voiceRowPerson"></div>
       <div class="row" id="voiceRowAdult"></div>
       <div class="row" id="voiceRowChild"></div>
@@ -667,7 +668,7 @@ async function openMenu(){ clearTimers(); show("menu"); const p=planToday(sessio
   $("mOverlap").textContent="최근 겹침: "+(sessions.slice(0,5).map(s=>Math.round((s.overlap||0)*100)+"%").join(" · ")||"아직 없음");
   $("mCount").textContent=`세션 ${sessions.length}회`; $("gallery").hidden=true; $("csv").hidden=true;
   await renderVoiceRows(settings.manual||p.syllable); }
-$("menuClose").addEventListener("click",()=>{ settings.names=$("mNames").value.split(",").map(x=>x.trim()).filter(Boolean).join(","); settings.openedBy=$("mOpenedBy").value||helpers()[0]; goHome(); });
+$("menuClose").addEventListener("click",()=>{ voiceSyl=null; settings.names=$("mNames").value.split(",").map(x=>x.trim()).filter(Boolean).join(","); settings.openedBy=$("mOpenedBy").value||helpers()[0]; goHome(); });
 $("mManual").addEventListener("change",e=>{ settings.manual=e.target.value; openMenu(); });
 $("mPerDay").addEventListener("change",e=>{ settings.perDay=+e.target.value; });
 $("mWords").addEventListener("change",e=>{ settings.words=e.target.checked; });
@@ -685,16 +686,19 @@ $("mPaperClear").addEventListener("click",e=>{ const b=e.currentTarget; if(b.dat
 $("mGallery").addEventListener("click",()=>{ const g=$("gallery"); g.hidden=!g.hidden; if(!g.hidden){ g.innerHTML=sessions.map(s=>`<figure><img src="${s.thumb||""}" alt=""><figcaption>${s.syllable} · ${new Date(s.date).toLocaleDateString("ko-KR",{month:"numeric",day:"numeric"})}${s.note?" · "+s.note:""}</figcaption></figure>`).join("")||'<p class="hint">아직 없음</p>'; } });
 $("mCsv").addEventListener("click",()=>{ const t=$("csv"); t.hidden=!t.hidden; t.value=["date,syllable,openedBy,endedBy,strokes,penLifts,turns,adultReplays,overlap,note",...sessions.map(s=>[new Date(s.date).toISOString(),s.syllable,s.openedBy,s.endedBy,s.strokeCount,s.penLifts,s.turnCount,s.adultReplays,(s.overlap||0).toFixed(2),(s.note||"").replace(/,/g," ")].join(","))].join("\n"); });
 
+let voiceSyl=null;
+function allLetters(){ return [...new Set([...nameSyllables(), ...CFG.writeList, ...CFG.levels.flatMap(l=>l.syls), ...CFG.words, ...CFG.abc, ...CFG.num])]; }
 async function renderVoiceRows(syl){
-  for(const [who,label,row] of [["p:"+settings.openedBy, settings.openedBy, "voiceRowPerson"],["adult","어른(공용)","voiceRowAdult"],["child","아이","voiceRowChild"]]){
+  syl = voiceSyl || syl; const vs=$("mVoiceSyl"); if(!vs.options.length){ for(const l of allLetters()){ const o=document.createElement("option"); o.value=l; o.textContent=l; vs.appendChild(o); } vs.addEventListener("change",e=>{ voiceSyl=e.target.value; renderVoiceRows(voiceSyl); }); } vs.value=syl;
+  for(const [who,label,row] of [["p:"+settings.openedBy, settings.openedBy, "voiceRowPerson"],["adult","어른(공용)","voiceRowAdult"],["child",childName(),"voiceRowChild"]]){
     const has=await Voice.has(syl,who); const r=$(row); r.innerHTML="";
     const mk=(t,fn,cls="")=>{ const b=document.createElement("button"); b.textContent=t; b.className=cls; b.addEventListener("click",fn); r.appendChild(b); };
-    if(Voice.canRecord()) mk(`${label} '${syl}' 3초 녹음`, async()=>{ try{ await Voice.record(syl,who); }catch{ $("voiceHint").textContent="마이크를 쓸 수 없어요. 아래 '파일로 올리기'를 쓰세요."; } renderVoiceRows(syl); }, who.startsWith("p:")?"primary":"");
+    if(Voice.canRecord()) mk(`${label} '${syl}' 3초 녹음`, async(e)=>{ const b=e.currentTarget; b.textContent="● 녹음 중… 말해 주세요"; b.disabled=true; try{ await Voice.record(syl,who); }catch{ $("voiceHint").textContent="마이크를 쓸 수 없어요. 아래 '파일로 올리기'를 쓰세요."; } renderVoiceRows(syl); }, who.startsWith("p:")?"primary":"");
     const lab=document.createElement("label"); lab.innerHTML=`<input type="file" accept="audio/*" hidden><button type="button"></button>`; lab.querySelector("button").textContent=`${label} 소리 파일로 올리기`; lab.querySelector("button").addEventListener("click",()=>lab.querySelector("input").click());
     lab.querySelector("input").addEventListener("change",async e=>{ const f=e.target.files[0]; if(f){ await DB.putVoice(Voice.key(syl,who),f); renderVoiceRows(syl);} }); r.appendChild(lab);
     if(has){ mk("들어보기",()=>Voice.play(syl,who)); mk("지우기",async(e)=>{ const b=e.currentTarget; if(b.dataset.arm){ await DB.delVoice(Voice.key(syl,who)); renderVoiceRows(syl); } else { b.dataset.arm="1"; b.textContent="한 번 더 누르면 지움"; } }); }
   }
-  $("voiceHint").textContent = Voice.canRecord() ? "3초 녹음돼요. 그날 어른이 즉석에서 한 번. 아이 것은 놀다가 그 소리를 낼 때. 녹음이 없으면 기기 음성이 대신 읽어요." : "이 화면에서는 마이크를 못 써요. 아이폰 음성 메모로 '이' 한 번 녹음해서 파일로 올리면 됩니다. 없으면 기기 음성이 대신 읽어요.";
+  $("voiceHint").textContent = Voice.canRecord() ? "버튼을 누르고 3초 안에 말하면 저장돼요. 아이가 놀다가 그 소리를 낼 때(\"아파요의 아!\") 아이 칸에 녹음하면, 그 글자를 쓸 때 아이 목소리가 먼저 나와요. 녹음이 없으면 기기 음성이 대신 읽어요." : "이 화면에서는 마이크를 못 써요. 음성 메모로 녹음해서 '파일로 올리기'를 쓰면 됩니다. 없으면 기기 음성이 대신 읽어요.";
 }
 
 boot();
