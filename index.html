@@ -86,10 +86,15 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);o
 #pile .sheet img,#pile2 .sheet img{width:100%;height:100%;object-fit:contain;display:block;pointer-events:none;-webkit-user-drag:none}
 #pile .sheet:nth-child(1),#pile2 .sheet:nth-child(1){transform:rotate(-6deg) translate(-6px,4px)} #pile .sheet:nth-child(2),#pile2 .sheet:nth-child(2){transform:rotate(3deg) translate(5px,-2px)} #pile .sheet:nth-child(3),#pile2 .sheet:nth-child(3){transform:rotate(-1deg)}
 /* 내 글씨 책: 한 장에 종이 한 장. 좌우 넘김만. 마지막은 빈 종이 → 홈 */
-#book{background:var(--paper);touch-action:none}
-#book .page{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
-#book .page img{pointer-events:none;-webkit-user-drag:none;user-select:none;width:min(78vw,78vh);height:min(78vw,78vh);object-fit:contain;image-rendering:auto;border-radius:10px;box-shadow:0 2px 12px rgba(27,42,74,.10)}
-#book .page.blank .sheet{width:min(78vw,78vh);height:min(78vw,78vh);border-radius:10px;background:var(--well)}
+/* 펼친 공책: 쓴 종이를 한눈에. 톡 누르면 그 글자 소리. 위아래로 넘겨 봄 */
+#book{background:var(--paper);overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:max(24px,env(safe-area-inset-top,0px)) 16px 110px;box-sizing:border-box}
+#book .spread{max-width:1100px;margin:0 auto;padding:28px clamp(16px,3vw,36px);border-radius:14px;background:#FBF8F1 linear-gradient(to right,transparent calc(50% - 1px),rgba(27,42,74,.10) 50%,transparent calc(50% + 1px));box-shadow:0 1px 2px rgba(27,42,74,.12),0 18px 40px -24px rgba(27,42,74,.4);display:grid;grid-template-columns:repeat(auto-fill,minmax(min(140px,40vw),1fr));gap:clamp(12px,2vw,22px)}
+#book .bookTitle{grid-column:1/-1;text-align:center;font-family:var(--serif);font-size:20px;letter-spacing:.1em;color:var(--ink-soft);margin-bottom:4px}
+#book .cell{aspect-ratio:1;border-radius:8px;background:var(--paper);box-shadow:0 1px 3px rgba(27,42,74,.15);overflow:hidden;cursor:pointer;touch-action:pan-y;transition:transform .15s}
+#book .cell img{width:100%;height:100%;object-fit:contain;display:block;pointer-events:none;-webkit-user-drag:none;user-select:none}
+#book .cell.pop{animation:cellpop .45s ease}
+@keyframes cellpop{40%{transform:scale(1.08)}100%{transform:scale(1)}}
+#book .close{position:fixed;left:50%;bottom:max(24px,env(safe-area-inset-bottom,0px));transform:translateX(-50%);font:inherit;font-size:17px;padding:12px 26px;min-height:48px;border-radius:999px;border:0;background:var(--ink);color:var(--paper);touch-action:manipulation;box-shadow:0 2px 10px rgba(27,42,74,.25)}
 /* 종료 예고: 7초째부터 종이가 천천히 어두워지고, 10초에 접혀서 더미로 */
 #canvasStage{transition:filter 2.5s ease,transform 1.1s cubic-bezier(.4,0,.6,1),opacity .4s ease .7s;transform-origin:8% 96%}
 #canvasStage.dimming{filter:brightness(.82)}
@@ -614,15 +619,17 @@ function renderPile(){ const pg=bookPages(); for(const id of ["pile","pile2"]){ 
   for(const s of pg.slice(-3)){ const d=document.createElement("div"); d.className="sheet"; const i=new Image(); i.src=s.thumb; i.alt=""; d.appendChild(i); pile.appendChild(d); } } }
 $("pile").addEventListener("pointerup",e=>{ e.stopPropagation(); if(stage==="home") openBook(); });
 $("pile2").addEventListener("pointerup",e=>{ e.stopPropagation(); if(stage==="ended") openBook(); });
-function openBook(){ clearTimers(); const pages=bookPages(); if(!pages.length){ return; } let idx=0; const bk=$("book"); show("book");
-  const draw=()=>{ bk.innerHTML=""; const p=document.createElement("div"); if(idx>=pages.length){ p.className="page blank"; p.innerHTML='<div class="sheet"></div>'; } else { p.className="page"; const i=new Image(); i.src=pages[idx].thumb; i.alt=""; p.appendChild(i); } bk.appendChild(p); armIdle(); };
-  const armIdle=()=>{ clearTimeout(timers.book); timers.book=setTimeout(goHome, CFG.bookIdle); };   // 가만히 있으면 홈
-  let sx=null, heard=false, hold=null; bk.onpointerdown=e=>{ sx=e.clientX; heard=false; clearTimeout(hold); hold=setTimeout(()=>{ if(idx<pages.length){ heard=true; Voice.playForSession(pages[idx].syllable); armIdle(); } },600); }; bk.onpointerup=e=>{ clearTimeout(hold); if(sx==null) return; const dx=e.clientX-sx; sx=null; if(heard&&Math.abs(dx)<=40){ heard=false; return; }   // 길게 누르면 그 글자 소리
-    if(idx>=pages.length && dx<=40){ goHome(); return; }             // 빈 종이에서는 홈 (뒤로 넘기는 것만 예외)
-    if(dx<-40) idx++; else if(dx>40) idx=Math.max(0,idx-1); else idx++;   // 탭도 다음 장
-    draw(); };
-  bk.onpointercancel=()=>{ sx=null; clearTimeout(hold); };
-  draw(); }
+// 펼친 공책: 지난 14일 종이를 오래된 것부터 한 펼침에. 톡 누르면 그 글자 소리(다시 누르면 또). 숫자·날짜·지우기 없음.
+function openBook(){ clearTimers(); const pages=bookPages(); if(!pages.length) return; const bk=$("book"); bk.innerHTML=""; show("book");
+  const armIdle=()=>{ clearTimeout(timers.book); timers.book=setTimeout(goHome, CFG.bookIdle); }; armIdle();
+  const sp=document.createElement("div"); sp.className="spread"; const t=document.createElement("div"); t.className="bookTitle"; t.textContent=`${childName()}의 공책`; sp.appendChild(t);
+  for(const pg of pages){ const c=document.createElement("div"); c.className="cell"; const i=new Image(); i.src=pg.thumb; i.alt=""; c.appendChild(i);
+    c.addEventListener("click",e=>{ e.stopPropagation(); armIdle(); c.classList.remove("pop"); void c.offsetWidth; c.classList.add("pop"); if(!pg.free) Voice.playForSession(pg.syllable); });   // click = 사파리가 소리를 허락하는 탭
+    sp.appendChild(c); }
+  bk.appendChild(sp);
+  const close=document.createElement("button"); close.className="close"; close.textContent="공책 덮기"; close.addEventListener("click",e=>{ e.stopPropagation(); goHome(); }); bk.appendChild(close);
+  bk.onscroll=armIdle; bk.onpointerdown=null; bk.onpointerup=null; bk.onpointercancel=null;
+  requestAnimationFrame(()=>{ bk.scrollTop=bk.scrollHeight; }); }   // 가장 최근 종이가 보이게
 $("ended").addEventListener("pointerup",()=>{ if(stage==="ended") goHome(); });
 $("undormant").addEventListener("click",goHome);
 
