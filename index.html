@@ -70,6 +70,7 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);o
 @keyframes pulse{to{opacity:.3}}
 /* 아이 차례 먹 색 고르기: 세 점. 오른쪽 아래 */
 #inks{position:absolute;right:max(24px,env(safe-area-inset-right,0px));top:max(24px,env(safe-area-inset-top,0px));display:flex;gap:16px}
+@media(max-width:480px){#inks{gap:8px;right:12px}#inks span{width:38px!important;height:38px!important}#who{left:150px}}
 #inks span{width:48px;height:48px;flex:0 0 auto;border-radius:50%;box-shadow:0 0 0 3px var(--paper),0 1px 4px rgba(27,42,74,.25);cursor:pointer;touch-action:manipulation;transition:transform .15s}
 #inks span.on{transform:scale(1.25);box-shadow:0 0 0 3px var(--paper),0 0 0 5px var(--ink-soft)}
 #inks.off{display:none}
@@ -92,7 +93,7 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);o
 #book{background:var(--paper);overflow-y:auto;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:max(24px,env(safe-area-inset-top,0px)) 16px 110px;box-sizing:border-box}
 #book .spread{max-width:1100px;margin:0 auto;padding:28px clamp(16px,3vw,36px);border-radius:14px;background:#FBF8F1 linear-gradient(to right,transparent calc(50% - 1px),rgba(27,42,74,.10) 50%,transparent calc(50% + 1px));box-shadow:0 1px 2px rgba(27,42,74,.12),0 18px 40px -24px rgba(27,42,74,.4);display:grid;grid-template-columns:repeat(auto-fill,minmax(min(140px,40vw),1fr));gap:clamp(12px,2vw,22px)}
 #book .bookTitle{grid-column:1/-1;text-align:center;font-family:var(--serif);font-size:20px;letter-spacing:.1em;color:var(--ink-soft);margin-bottom:4px}
-#book .cell{aspect-ratio:1;border-radius:8px;background:var(--paper);box-shadow:0 1px 3px rgba(27,42,74,.15);overflow:hidden;cursor:pointer;touch-action:pan-y;transition:transform .15s}
+#book .cell{content-visibility:auto;contain-intrinsic-size:auto 160px;aspect-ratio:1;border-radius:8px;background:var(--paper);box-shadow:0 1px 3px rgba(27,42,74,.15);overflow:hidden;cursor:pointer;touch-action:pan-y;transition:transform .15s}
 #book .cell img{width:100%;height:100%;object-fit:contain;display:block;pointer-events:none;-webkit-user-drag:none;user-select:none}
 #book .cell.pop{animation:cellpop .45s ease}
 @keyframes cellpop{40%{transform:scale(1.08)}100%{transform:scale(1)}}
@@ -142,6 +143,9 @@ canvas{position:absolute;top:0;left:0;touch-action:none}
 .grid figure{margin:0;background:var(--well);border-radius:10px;overflow:hidden}
 .grid img{width:100%;display:block;aspect-ratio:1}
 .grid figcaption{font-size:12px;color:var(--ink-soft);padding:6px 8px}
+.grid .row{grid-column:1/-1}
+.grid figure .del{display:block;width:calc(100% - 16px);margin:0 8px 8px;font-size:13px;padding:8px;min-height:40px}
+.grid button[data-arm]{background:#A8432E;color:#fff;border-color:#A8432E}
 textarea{width:100%;min-height:120px;font:12px ui-monospace,monospace;border:1px solid var(--ink-faint);border-radius:8px;background:var(--well);color:var(--ink)}
 #trigger{position:absolute;top:0;left:0;width:140px;height:140px}
 @media (prefers-reduced-motion:reduce){#adultLayer{transition:none}}
@@ -215,6 +219,7 @@ textarea{width:100%;min-height:120px;font:12px ui-monospace,monospace;border:1px
     <section>
       <h2>소리</h2>
       <label class="tog"><input type="checkbox" id="mScratch" checked> 쓸 때 사각사각 소리 (종이에 붓 스치는 소리, 결과음 아님)</label>
+      <label class="tog"><input type="checkbox" id="mPenOnly"> 펜슬 전용 — 손가락·손날 터치 무시 (펜슬이 처음 닿으면 저절로 켜져요)</label>
     </section>
 
     <section>
@@ -269,7 +274,7 @@ textarea{width:100%;min-height:120px;font:12px ui-monospace,monospace;border:1px
 
     <section>
       <h2>일지 (이 기기 안에만)</h2>
-      <div class="row"><span id="mCount"></span><button id="mGallery">모음 보기</button><button id="mCsv">일지 글자로 보기</button></div>
+      <div class="row"><span id="mCount"></span><button id="mGallery">모음 보기 · 지우기</button><button id="mCsv">일지 글자로 보기</button></div>
       <div id="gallery" class="grid" hidden></div>
       <textarea id="csv" hidden readonly></textarea>
       <p class="hint">대시보드 없음. 목표치 없음. 2주에 한 번만 보세요.</p>
@@ -328,7 +333,8 @@ const settings = {
   get inkColor(){ return S.get("inkColor",CFG.ink); }, set inkColor(v){ S.set("inkColor",v); },
   get notebook(){ return S.get("notebook","ko"); }, set notebook(v){ S.set("notebook",v); },   // ko | abc | num
   get words(){ return S.get("words",true); }, set words(v){ S.set("words",v); },
-  get scratch(){ return S.get("scratch",true); }, set scratch(v){ S.set("scratch",v); },   // 쓸 때 사각사각
+  get scratch(){ return S.get("scratch",true); }, set scratch(v){ S.set("scratch",v); },
+  get penOnly(){ return S.get("penOnly",false); }, set penOnly(v){ S.set("penOnly",v); },   /* 펜슬 전용: 손가락·손날 터치 무시. 펜이 처음 닿으면 저절로 켜짐(어른이 메뉴에서 직접 정했으면 그대로) */   // 쓸 때 사각사각
 };
 // 세션·음성은 IndexedDB (사진·획 데이터가 커서)
 const DB = (()=>{
@@ -339,6 +345,7 @@ const DB = (()=>{
   const tx=(store,mode,fn)=>open().then(d=>new Promise((res,rej)=>{ const t=d.transaction(store,mode); const q=fn(t.objectStore(store)); t.oncomplete=()=>res(q&&q.result); t.onerror=()=>rej(t.error); }));
   return {
     addSession:(s)=>tx("sessions","readwrite",st=>st.add(s)).then(id=>{ s.id=id; return id; }).catch(()=>{}),
+    delSession:(id)=>tx("sessions","readwrite",st=>st.delete(id)).catch(()=>{}),
     putSession:(s)=>tx("sessions","readwrite",st=>st.put(s)).catch(()=>{}),
     allSessions:()=>tx("sessions","readonly",st=>st.getAll()).then(r=>(r||[]).sort((a,b)=>b.date-a.date)).catch(()=>[]),
     putVoice:(k,blob)=>tx("voices","readwrite",st=>st.put(blob,k)).catch(()=>{}),
@@ -424,16 +431,19 @@ const Voice = {
   async has(syl,who){ return !!(await DB.getVoice(this.key(syl,who))); },
   // 재생은 Web Audio로: iOS 사파리는 <audio>.play()를 '누른 그 순간'이 아니면 막는다(녹음 3초 뒤, 펜 떼고 2초 뒤 재생이 안 되던 원인).
   // 첫 터치 때 오디오를 열어 두면(unlockAudio) 그 뒤로는 언제든 재생된다.
-  async play(syl,who){ const b=await DB.getVoice(this.key(syl,who)); if(!b) return false;
-    try{ const ac=audioCtx(); if(ac.state!=="running") await ac.resume().catch(()=>{}); if(ac.state!=="running") throw 0; const buf=await ac.decodeAudioData(await b.arrayBuffer()); const src=ac.createBufferSource(); src.buffer=buf; src.connect(ac.destination); src.start(); return true; }
-    catch{ const u=URL.createObjectURL(b); const a=new Audio(u); a.play().catch(()=>{}); a.onended=()=>URL.revokeObjectURL(u); return true; } },
+  async play(syl,who){ const b=await DB.getVoice(this.key(syl,who)); if(!b||b.size<800) return false;   // 빈 녹음은 없는 것으로(다음 목소리·기기 음성으로 넘어감)
+    const ac=audioCtx(); if(ac.state!=="running") await Promise.race([ac.resume().catch(()=>{}), new Promise(r=>setTimeout(r,300))]);   // iOS에서 resume이 안 끝나고 걸리는 경우 대비
+    if(ac.state==="running"){ try{ const buf=await ac.decodeAudioData(await b.arrayBuffer()); const src=ac.createBufferSource(); src.buffer=buf; src.connect(ac.destination); src.start(); return true; }catch{ return false; } }
+    const u=URL.createObjectURL(b); const a=new Audio(u); a.onended=()=>URL.revokeObjectURL(u); return a.play().then(()=>true,()=>false); },
   async playForSession(syl){ if(settings.preferChild && await this.play(syl,"child")) return; if(await this.play(syl,"p:"+settings.openedBy)) return; if(await this.play(syl,"adult")) return; this.tts(syl); },
   tts(syl){ try{ let text=syl, lang="ko-KR"; if(/^[A-Z]$/.test(syl)) lang="en-US"; else if(CFG.numWords[syl]) text=CFG.numWords[syl]; const u=new SpeechSynthesisUtterance(text); u.lang=lang; u.rate=.9; u.volume=.6; speechSynthesis.speak(u);}catch{} },
   canRecord(){ return !!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia&&window.MediaRecorder); },
   abort:null,
-  async record(syl,who){ const stream=await navigator.mediaDevices.getUserMedia({audio:true}); const rec=new MediaRecorder(stream); const chunks=[]; rec.ondataavailable=e=>chunks.push(e.data); let cancel=false;
+  async record(syl,who){ let cancel=false; this.abort=()=>{ cancel=true; };   // 마이크 허용 창이 떠 있는 동안 화면을 떠나도 취소
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true}); if(cancel){ stream.getTracks().forEach(t=>t.stop()); this.abort=null; return false; }
+    const rec=new MediaRecorder(stream); const chunks=[]; rec.ondataavailable=e=>chunks.push(e.data);
     return new Promise(res=>{ this.abort=()=>{ cancel=true; if(rec.state!=="inactive") rec.stop(); };
-      rec.onstop=async()=>{ stream.getTracks().forEach(t=>t.stop()); this.abort=null; if(!cancel) await DB.putVoice(this.key(syl,who), new Blob(chunks,{type:rec.mimeType||"audio/mp4"})); res(!cancel); };
+      rec.onstop=async()=>{ stream.getTracks().forEach(t=>t.stop()); this.abort=null; const blob=new Blob(chunks,{type:rec.mimeType||"audio/mp4"}); if(!cancel && blob.size>=800) await DB.putVoice(this.key(syl,who), blob); res(!cancel); };
       rec.start(); setTimeout(()=>rec.state!=="inactive"&&rec.stop(),3000); }); },   // 다른 화면으로 가면 녹음 취소(마이크도 끔)
 };
 let AC=null;
@@ -480,12 +490,13 @@ const CV = (()=>{
     return { warm(){ if(settings.scratch) ensure(); }, move(v){ if(!settings.scratch||!ensure()) return; if(AC.state==="suspended") AC.resume(); clearTimeout(timers.acSleep); const target=Math.min(0.09, v*0.02); g.gain.setTargetAtTime(target, AC.currentTime, 0.03); lastT=performance.now(); clearTimeout(timers.scratch); timers.scratch=setTimeout(()=>this.stop(),90); },
       stop(){ if(!g) return; g.gain.setTargetAtTime(0, AC.currentTime, 0.05); } }; })();   // 오디오는 재우지 않는다(iOS는 다시 깨우려면 터치가 필요). 앱이 뒤로 가면 visibilitychange에서 재움
   // 입력: 펜 우선, 손가락 허용. 펜을 쓴 직후 2초 안의 넓은 터치(손바닥)는 무시.
-  function accept(e){ if(e.pointerType==="pen"){ lastPenTime=performance.now(); return true; } if(e.pointerType==="touch"){ if(Object.values(active).some(a=>a.pen)) return false; if(lastPenTime && performance.now()-lastPenTime<2000 && (e.width||0)>40) return false; return true; } return e.pointerType==="mouse"; }   // 손바닥 무시: 펜이 닿아 있는 동안, 또는 펜 직후 2초의 넓은 터치. 펜 없이 손가락만 쓰면 전부 받는다.
+  function accept(e){ if(e.pointerType==="pen"){ lastPenTime=performance.now(); if(!settings.penOnly && !S.get("penOnlySet",false)) settings.penOnly=true; return true; } if(e.pointerType==="touch"){ if(settings.penOnly) return false; if(Object.values(active).some(a=>a.pen)) return false; if(lastPenTime && performance.now()-lastPenTime<2000 && (e.width||0)>40) return false; return true; } return e.pointerType==="mouse"; }   // 손바닥 무시: 펜이 닿아 있는 동안, 또는 펜 직후 2초의 넓은 터치. 펜 없이 손가락만 쓰면 전부 받는다.
   const active={};
   wrap.addEventListener("pointerdown",e=>{ if(!accept(e)) return; const p=pos(e);
     const target = settings.sibling && inRect(sibRect,p.x,p.y) ? "sib" : inRect(rect,p.x,p.y) ? "main" : null; if(!target) return;
     // 두 번째 손가락이 오면(두 손가락 더블탭 = 어른 획 다시 보기) 진행 중 획은 버리고 둘 다 획으로 받지 않는다
-    if(e.pointerType==="touch" && Object.values(active).some(a=>a.touch)){ for(const k in active) delete active[k]; redrawAll(); return; }
+    if(e.pointerType==="touch" && Object.values(active).some(a=>a.touch)){ for(const k in active) if(active[k].touch) delete active[k]; redrawAll(); return; }   /* 손가락 둘이면 손가락 획만 버림 — 펜 획은 절대 안 지움 */
+    if(e.pointerType==="pen" && Object.values(active).some(a=>a.touch)){ for(const k in active) if(active[k].touch) delete active[k]; redrawAll(); }   /* 펜이 오면 먼저 닿은 손날 획은 버림 */
     e.preventDefault(); wrap.setPointerCapture?.(e.pointerId);
     p.w = (e.pointerType==="pen"&&e.pressure>0) ? CFG.inkWidth*(0.55+0.9*e.pressure) : CFG.inkWidth; base(p);
     active[e.pointerId]={target,pts:[p],pen:e.pointerType==="pen",touch:e.pointerType==="touch",color:settings.inkColor};
@@ -496,6 +507,7 @@ const CV = (()=>{
     const x=ctx(a.target==="sib"?sib:(mode==="adult"?adult:child)); if(a.target==="sib"){ x.strokeStyle="rgba(27,42,74,.7)"; } else if(mode==="child"){ x.strokeStyle=a.color; }
     const n=a.pts.length; if(n>=2){ x.fillStyle=x.strokeStyle; seg(x,q,p,a.target==="sib"?.8:1); if(a.target==="main"){ const v=Math.hypot(p.x-q.x,p.y-q.y)/Math.max(1,p.t-q.t); Scratch.move(v); } } });
   function endStroke(e){ const a=active[e.pointerId]; if(!a) return; delete active[e.pointerId]; Scratch.stop(); if(a.target==="sib") return;
+    { const q=a.pts.at(-1), up=pos(e); if(q && Math.hypot(up.x-q.x,up.y-q.y)<6){ up.w=q.w; base(up); a.pts.push(up); } }   // 가만히 멈췄다 떼도 먹 고임(움직임 이벤트가 없어도 뗀 시각으로 잰다)
     const pts=a.pts; pts.color=a.color; if(mode==="adult"){ adultStrokes.push(pts); } else { strokes.push(pts); penLifts++; turns+=countTurns(pts); decideHand(pts); inkPool(pts); $("childDone").hidden=false; }   // 한 획이라도 그으면 "다 썼어요"
     redrawAll();
     if(mode==="child") timers.sound=setTimeout(()=>onPenUp&&onPenUp(), CFG.soundDelay);
@@ -516,7 +528,7 @@ const CV = (()=>{
   function showAdult(strokesIn, lifetime){ adultStrokes=strokesIn; adult.style.opacity=1; redrawAll(); clearTimeout(timers.fade); lifetimeArmed=false; adultLife=lifetime; }   // 수명 시계는 아이의 첫 터치에서 시작(pointerdown)
   function freeze(){ wrap.style.pointerEvents="none"; for(const k in active) delete active[k]; Scratch.stop(); }
   // 두 손가락 더블탭 = 어른 획 다시 보기 (재요청 횟수 기록)
-  let tapTimes=[]; wrap.addEventListener("touchstart",e=>{ if(e.touches.length===2){ const now=performance.now(); tapTimes=tapTimes.filter(t=>now-t<400); tapTimes.push(now); if(tapTimes.length>=2){ tapTimes=[]; if(mode==="child"&&adultStrokes.length){ if(current) current.adultReplays++; showAdult(adultStrokes, adultLifetime); } } } },{passive:true});
+  let tapTimes=[]; wrap.addEventListener("touchstart",e=>{ if(e.touches.length===2 && !(Object.values(active).some(a=>a.pen) || performance.now()-lastPenTime<800)){ const now=performance.now(); tapTimes=tapTimes.filter(t=>now-t<400); tapTimes.push(now); if(tapTimes.length>=2){ tapTimes=[]; if(mode==="child"&&adultStrokes.length){ if(current) current.adultReplays++; showAdult(adultStrokes, adultLifetime); } } } },{passive:true});
   return { layout, reset, setMode, showAdult, overlap, freeze, warmSound:()=>Scratch.warm(), get strokes(){return strokes;}, get adultStrokes(){return adultStrokes;}, get penLifts(){return penLifts;}, get turns(){return turns;},
     set sharedWriting(v){ sharedWriting=v; }, set onPenUp(f){onPenUp=f;}, set onIdle(f){onIdle=f;}, set onWarn(f){onWarn=f;}, thumbnail(){ const c=document.createElement("canvas"); c.width=600; c.height=600; const x=c.getContext("2d"); x.fillStyle=CFG.paper; x.fillRect(0,0,600,600); x.strokeStyle=CFG.ink; x.lineCap="round"; x.lineJoin="round"; /* 글씨가 있는 자리 중심으로 잘라 담는다(여백 30%, 너무 작으면 종이 절반 크기) */
       const all=strokes.flat(); let bx0=Math.min(...all.map(p=>p.x)), bx1=Math.max(...all.map(p=>p.x)), by0=Math.min(...all.map(p=>p.y)), by1=Math.max(...all.map(p=>p.y));
@@ -608,7 +620,7 @@ $("homeCenter").addEventListener("pointerup",()=>{ clearTimeout(homeHold); if(st
 $("free").addEventListener("pointerup",e=>{ e.stopPropagation(); if(stage!=="home") return; startFree(); });
 function startFree(){ clearTimers(); document.documentElement.requestFullscreen?.().catch(()=>{});
   current={ date:Date.now(), syllable:"·", free:true, openedBy:settings.openedBy, note:"그림", adultReplays:0 }; adultLifetime=null;
-  CFG.inkWidth=CFG.drawWidth; drawing=true; $("childDone").textContent="다 그렸어요";   // 그림 종이: 붓 두 배, 색 여섯
+  if(!drawing) S.set("writeInk",settings.inkColor); { const d=S.get("drawInk",null); if(d) settings.inkColor=d; } CFG.inkWidth=CFG.drawWidth; drawing=true; $("childDone").textContent="다 그렸어요";   // 그림 종이: 붓 두 배, 색 여섯
   CV.sharedWriting=false; CV.reset(); $("why").textContent=""; renderInks(); CV.warmSound(); show("canvasStage"); CV.layout(); CV.setMode("child"); }
 let drawing=false; const WRITE_WIDTH=22;
 // 아이 차례 먹 색
@@ -624,23 +636,23 @@ function renderInks(){ const box=$("inks"); box.innerHTML="";
 function bookPages(){ const cut=Date.now()-CFG.dormantDays*86400000; return sessions.filter(s=>s.thumb && s.date>cut && (s.strokeCount||0)>0).sort((a,b)=>a.date-b.date); }
 function renderPile(){ const pg=bookPages(); for(const id of ["pile","pile2"]){ const pile=$(id); pile.hidden = pg.length===0; pile.innerHTML="";
   for(const s of pg.slice(-3)){ const d=document.createElement("div"); d.className="sheet"; const i=new Image(); i.src=s.thumb; i.alt=""; d.appendChild(i); pile.appendChild(d); } } }
-$("pile").addEventListener("pointerup",e=>{ e.stopPropagation(); if(stage==="home") openBook(); });
-$("pile2").addEventListener("pointerup",e=>{ e.stopPropagation(); if(stage==="ended") openBook(); });
+$("pile").addEventListener("pointerup",e=>e.stopPropagation()); $("pile").addEventListener("click",e=>{ e.stopPropagation(); if(stage==="home") openBook(); });
+$("pile2").addEventListener("pointerup",e=>e.stopPropagation()); $("pile2").addEventListener("click",e=>{ e.stopPropagation(); if(stage==="ended") openBook(); });   // click으로 열기: 열린 공책의 셀이 뒤따라온 click을 받지 않게
 // 펼친 공책: 지난 14일 종이를 오래된 것부터 한 펼침에. 톡 누르면 그 글자 소리(다시 누르면 또). 숫자·날짜·지우기 없음.
-function openBook(){ clearTimers(); const pages=bookPages(); if(!pages.length) return; const bk=$("book"); bk.innerHTML=""; show("book");
+function openBook(){ clearTimers(); const pages=bookPages(); if(!pages.length) return; const bk=$("book"); bk.innerHTML=""; show("book"); const openedAt=performance.now(); const fresh=()=>performance.now()-openedAt<450;
   const armIdle=()=>{ clearTimeout(timers.book); timers.book=setTimeout(goHome, CFG.bookIdle); }; armIdle();
   const sp=document.createElement("div"); sp.className="spread"; const t=document.createElement("div"); t.className="bookTitle"; t.textContent=`${childName()}의 공책`; sp.appendChild(t);
   for(const pg of pages){ const c=document.createElement("div"); c.className="cell"; const i=new Image(); i.src=pg.thumb; i.alt=""; c.appendChild(i);
-    c.addEventListener("click",e=>{ e.stopPropagation(); armIdle(); c.classList.remove("pop"); void c.offsetWidth; c.classList.add("pop"); if(!pg.free) Voice.playForSession(pg.syllable); else Voice.play(voiceKeyOf(pg),"child"); });   // click = 사파리가 소리를 허락하는 탭. 그림은 담아 둔 목소리("고양이야!")
+    i.decoding="async"; c.addEventListener("click",e=>{ e.stopPropagation(); if(fresh()) return; armIdle(); c.classList.remove("pop"); void c.offsetWidth; c.classList.add("pop"); if(!pg.free) Voice.playForSession(pg.syllable); else Voice.play(voiceKeyOf(pg),"child"); });   // click = 사파리가 소리를 허락하는 탭. 그림은 담아 둔 목소리("고양이야!")
     sp.appendChild(c); }
   bk.appendChild(sp);
-  const close=document.createElement("button"); close.className="close"; close.textContent="공책 덮기"; close.addEventListener("click",e=>{ e.stopPropagation(); goHome(); }); bk.appendChild(close);
+  const close=document.createElement("button"); close.className="close"; close.textContent="공책 덮기"; close.addEventListener("click",e=>{ e.stopPropagation(); if(fresh()) return; goHome(); }); bk.appendChild(close);
   bk.onscroll=armIdle; bk.onpointerdown=null; bk.onpointerup=null; bk.onpointercancel=null;
   requestAnimationFrame(()=>{ bk.scrollTop=bk.scrollHeight; }); }   // 가장 최근 종이가 보이게
 $("ended").addEventListener("pointerup",()=>{ if(stage==="ended") goHome(); });
 $("undormant").addEventListener("click",goHome);
 
-function startSession(){ clearTimers(); CFG.inkWidth=WRITE_WIDTH; drawing=false; $("childDone").textContent="다 썼어요"; document.documentElement.requestFullscreen?.().catch(()=>{});
+function startSession(){ clearTimers(); if(drawing){ S.set("drawInk",settings.inkColor); const w=S.get("writeInk",null); if(w) settings.inkColor=w; } CFG.inkWidth=WRITE_WIDTH; drawing=false; $("childDone").textContent="다 썼어요"; document.documentElement.requestFullscreen?.().catch(()=>{});
   current={ date:Date.now(), syllable:plan.syllable, notebook:settings.notebook, word:!!plan.word, openedBy:settings.openedBy, note: plan.shared?"분담":plan.word?"낱말":(settings.swap?"교대일":""), adultReplays:0 };
   adultLifetime = CFG.adultLifetime(writtenDays()+settings.lifeStep);   // 세션 수가 아니라 쓴 날 수
   CV.sharedWriting = plan.shared && !settings.manual; CV.reset();
@@ -648,7 +660,8 @@ function startSession(){ clearTimers(); CFG.inkWidth=WRITE_WIDTH; drawing=false;
 document.addEventListener("visibilitychange",()=>{ if(document.hidden){ try{ AC&&AC.suspend(); }catch{} Voice.abort?.(); } });
 function startWriting(){ CV.warmSound(); const w=$("why"); w.innerHTML=""; const h=document.createElement("span"); h.className="who"; h.append(`${settings.openedBy} 먼저 · `); const b=document.createElement("b"); b.textContent=plan.syllable; h.append(b); w.append(h, document.createTextNode(whyLine(plan).split(" · ").slice(1).join(" · "))); renderInks(); show("canvasStage"); CV.layout(); if(settings.swap){ CV.setMode("child"); } else { CV.setMode("adult"); } }
 // 손을 뗄 때 바로 반응(브라우저 click은 빠른 연속 탭에서 빠질 수 있음). click은 키보드·마우스용으로 같이 두되 한 번만 실행.
-function onTap(el,fn){ let last=0; const go=e=>{ const n=performance.now(); if(n-last<400) return; last=n; fn(e); }; el.addEventListener("pointerup",e=>{ if(e.button>0) return; go(e); }); el.addEventListener("click",go); }
+let lastTapAt=0;   // 버튼끼리 공유: 손가락 탭 뒤에 따라오는 click이 같은 자리에 새로 나타난 버튼을 누르지 않게(교대일 "다 썼어요" → "다 썼어")
+function onTap(el,fn){ const go=e=>{ const n=performance.now(); if(n-lastTapAt<450) return; lastTapAt=n; fn(e); }; el.addEventListener("pointerup",e=>{ if(e.button>0) return; go(e); }); el.addEventListener("click",go); }
 // 아이가 스스로 끝내기. 안 누르면 15초 뒤 저절로 접힌다(예비).
 onTap($("childDone"),()=>{ if(stage!=="canvasStage") return; $("childDone").hidden=true; clearTimeout(timers.idle); clearTimeout(timers.warn); clearTimeout(timers.sound); if(current) current.endedBy="아이"; endChild(); });
 onTap($("handoff"),()=>{ if(settings.swap){ foldThenEnd(); return; } const a=CV.adultStrokes.slice(); CV.setMode("child"); CV.showAdult(a, adultLifetime); });
@@ -661,7 +674,8 @@ function endChild(){ if(!current){ show("ended"); return; }
     const childStrokes=CV.strokes.slice(); CV.setMode("adult"); CV.showAdult(childStrokes, null); $("handoff").textContent="다 썼어"; return; }
   foldThenEnd(); }
 // 종이가 접혀 더미로 들어가는 전환. 평가 없음. 애니메이션 끝나면 종료 화면.
-function foldThenEnd(){ const st=$("canvasStage"); CV.freeze(); $("inks").classList.add("off"); $("childDone").hidden=true; $("handoff").hidden=true; $("why").classList.add("off");   // 종이만 접혀 들어가게(버튼·색 동그라미는 먼저 숨김) if(matchMedia("(prefers-reduced-motion: reduce)").matches){ endSession(); return; }
+function foldThenEnd(){ const st=$("canvasStage"); CV.freeze(); $("inks").classList.add("off"); $("childDone").hidden=true; $("handoff").hidden=true; $("why").classList.add("off");   // 종이만 접혀 들어가게(버튼·색 동그라미는 먼저 숨김)
+  if(matchMedia("(prefers-reduced-motion: reduce)").matches){ endSession(); return; }
   st.style.transformOrigin="";   // 왼쪽 아래(더미 자리)로 접힌다 — CSS 기본값
   st.classList.add("fold"); timers.fold=setTimeout(async()=>{ await endSession(); st.classList.remove("fold","dimming"); }, CFG.foldMs); }
 let lastSession=null;
@@ -685,7 +699,7 @@ function renderEndMic(){ const m=$("endMic"), pl=$("endPlay"); const syl=voiceKe
     t=setTimeout(async()=>{ m.classList.remove("arming"); m.classList.add("rec"); $("endPlay").hidden=true; const syl=voiceKeyOf(lastSession); let n=3; lab(`듣고 있어요… ${n}`); clearInterval(tick3); tick3=setInterval(()=>{ n--; if(n>0) lab(`듣고 있어요… ${n}`); },1000);
       try{ const ok=await Voice.record(syl,"child"); clearInterval(tick3); m.classList.remove("rec"); if(!ok||stage!=="ended") return;
         const b=await loadMicAudio(syl); if(!b||b.size<800){ lab("소리가 안 담겼어요 · 마이크 허용을 확인하고 다시 길게"); return; }
-        $("endPlay").hidden=false; lab("담았어요 · 길게 누르면 다시 담기"); micAudio.play().catch(()=>{}); }
+        $("endPlay").hidden=false; lab("담았어요 · 길게 누르면 다시 담기"); Voice.play(syl,"child"); }
       catch{ clearInterval(tick3); m.classList.remove("rec"); lab("마이크를 쓸 수 없어요 (어른 메뉴에서 파일로 올리기)"); } },1000); });
   ["pointerup","pointercancel","pointerleave"].forEach(ev=>m.addEventListener(ev,e=>{ e.stopPropagation(); clearTimeout(t); m.classList.remove("arming"); })); })();
 function renderEnded(){ renderEndMic(); const sh=$("endSheet"), hint=$("sealHint"); const ok=lastSession && lastSession.thumb && (lastSession.strokeCount||0)>0;
@@ -725,7 +739,7 @@ trig.addEventListener("pointerdown",e=>{ held.add(e.pointerType+":"+e.pointerId)
 async function openMenu(){ clearTimers(); show("menu"); const p=planToday(sessions);
   $("mToday").textContent=settings.manual||p.syllable; $("mReason").textContent=settings.manual?"어른이 직접 고름":p.reason+(p.shared?" (분담)":"");
   const sel=$("mManual"); const lst = settings.notebook==="abc"?CFG.abc : settings.notebook==="num"?CFG.num : writeListNow(); sel.innerHTML='<option value="">자동</option>'+lst.map(s=>`<option value="${s}">${s}</option>`).join(""); sel.value=settings.manual;
-  $("mWords").checked=settings.words; $("mScratch").checked=settings.scratch;
+  $("mWords").checked=settings.words; $("mScratch").checked=settings.scratch; $("mPenOnly").checked=settings.penOnly;
   $("mExclude").checked=settings.excluded.includes(settings.manual||p.syllable);
   $("mPerDay").value=String(settings.perDay); $("mLevel").value=String(settings.level); $("levelHint").textContent=(roundDone(sessions)?"12글자를 한 바퀴 돌았어요. 다음 묶음을 켤 수 있어요. ":"아직 한 바퀴 전이에요. ")+"한 번에 한 요소만. 아이에게 고르기 화면은 없고, 오늘 글자는 그대로 하나입니다.";
   $("mNames").value=settings.names; const ob=$("mOpenedBy"); ob.innerHTML=""; for(const h of helpers()){ const o=document.createElement("option"); o.value=h; o.textContent=h; ob.appendChild(o); } ob.value=settings.openedBy; $("mPreferChild").checked=settings.preferChild;
@@ -739,6 +753,7 @@ $("mManual").addEventListener("change",e=>{ settings.manual=e.target.value; voic
 $("mPerDay").addEventListener("change",e=>{ settings.perDay=+e.target.value; });
 $("mWords").addEventListener("change",e=>{ settings.words=e.target.checked; });
 $("mScratch").addEventListener("change",e=>{ settings.scratch=e.target.checked; });
+$("mPenOnly").addEventListener("change",e=>{ settings.penOnly=e.target.checked; S.set("penOnlySet",true); });
 $("mLevel").addEventListener("change",e=>{ settings.level=+e.target.value; if(settings.manual && !writeListNow().includes(settings.manual)) settings.manual=""; openMenu(); });
 $("mExclude").addEventListener("change",e=>{ const s=$("mToday").textContent; const ex=new Set(settings.excluded); e.target.checked?ex.add(s):ex.delete(s); settings.excluded=[...ex]; });
 $("mPreferChild").addEventListener("change",e=>settings.preferChild=e.target.checked);
@@ -746,7 +761,15 @@ $("mSibling").addEventListener("change",e=>{ settings.sibling=e.target.checked; 
 $("mSwap").addEventListener("change",e=>settings.swap=e.target.checked);
 $("mLifeMinus").addEventListener("click",()=>{ settings.lifeStep=settings.lifeStep-1; openMenu(); });
 $("mLifePlus").addEventListener("click",()=>{ settings.lifeStep=settings.lifeStep+1; openMenu(); });
-$("mGallery").addEventListener("click",()=>{ const g=$("gallery"); g.hidden=!g.hidden; if(!g.hidden){ g.innerHTML=sessions.map(s=>`<figure><img src="${s.thumb||""}" alt=""><figcaption>${s.syllable} · ${new Date(s.date).toLocaleDateString("ko-KR",{month:"numeric",day:"numeric"})}${s.note?" · "+s.note:""}</figcaption></figure>`).join("")||'<p class="hint">아직 없음</p>'; } });
+// 보관함(어른만): 종이마다 '지우기'(두 번 눌러야), 맨 위 '전부 비우기'(두 번). 그림에 담은 목소리도 같이 지움. 가족 목소리·설정은 그대로.
+async function forgetSession(s){ if(s.free&&s.id!=null) await DB.delVoice(Voice.key(`그림#${s.id}`,"child")); if(s.id!=null) await DB.delSession(s.id); }
+function armBtn(b,label,fn){ b.textContent=label; b.addEventListener("click",async()=>{ if(b.dataset.arm){ b.disabled=true; await fn(); } else { b.dataset.arm="1"; b.textContent="한 번 더 누르면 지움"; setTimeout(()=>{ if(b.isConnected&&!b.disabled){ delete b.dataset.arm; b.textContent=label; } },3000); } }); return b; }
+function renderGallery(){ const g=$("gallery"); g.innerHTML=""; if(!sessions.length){ g.innerHTML='<p class="hint">아직 없음</p>'; return; }
+  const top=document.createElement("div"); top.className="row"; top.appendChild(armBtn(document.createElement("button"),"전부 비우기",async()=>{ for(const s of sessions) await forgetSession(s); sessions=await DB.allSessions(); renderGallery(); renderPile(); $("mCount").textContent=`세션 ${sessions.length}회`; })); g.appendChild(top);
+  for(const s of sessions){ const f=document.createElement("figure"); const i=new Image(); i.src=s.thumb||""; i.alt=""; const cap=document.createElement("figcaption"); cap.textContent=`${s.free?"그림":s.syllable} · ${new Date(s.date).toLocaleDateString("ko-KR",{month:"numeric",day:"numeric"})}${s.note?" · "+s.note:""}`;
+    const del=armBtn(document.createElement("button"),"지우기",async()=>{ await forgetSession(s); sessions=await DB.allSessions(); renderGallery(); renderPile(); $("mCount").textContent=`세션 ${sessions.length}회`; }); del.className="del";
+    f.append(i,cap,del); g.appendChild(f); } }
+$("mGallery").addEventListener("click",()=>{ const g=$("gallery"); g.hidden=!g.hidden; if(!g.hidden) renderGallery(); });
 $("mCsv").addEventListener("click",()=>{ const t=$("csv"); t.hidden=!t.hidden; t.value=["date,syllable,openedBy,endedBy,strokes,penLifts,turns,adultReplays,overlap,note",...sessions.map(s=>[new Date(s.date).toISOString(),s.syllable,s.openedBy,s.endedBy,s.strokeCount,s.penLifts,s.turnCount,s.adultReplays,(s.overlap||0).toFixed(2),(s.note||"").replace(/,/g," ")].join(","))].join("\n"); });
 
 let voiceSyl=null;
